@@ -1,10 +1,10 @@
-import { requireChoice, requireNoul } from "./jev-client.js";
+import { requireChoice, requireNoul } from "./jev-client";
 import {
   JUDGMENT_NOUL_THRESHOLD,
   type Classification,
   type JevClient,
   type QuestionKind,
-} from "./types.js";
+} from "./types";
 
 export const CLASSIFY_IS_JUDGMENT =
   "Is the user asking whether the attached document supports, contradicts, or is silent on a specific claim or proposition?";

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { classifyQuestion, isClosedJudgment } from "../src/core/classify.js";
+import { classifyQuestion, isClosedJudgment } from "../src/core/classify";
 import {
   MEDICAL_QUESTION,
   openEndedClassification,
   scriptedJev,
-} from "./helpers.js";
+} from "./helpers";
 
 describe("classifyQuestion", () => {
   it("accepts a closed judgment about the attached document", async () => {

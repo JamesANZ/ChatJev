@@ -1,4 +1,4 @@
-import { STRENGTH_CRITERIA, type JevRequest } from "./types.js";
+import { STRENGTH_CRITERIA, type JevRequest } from "./types";
 
 export const RELATION_INSTRUCTIONS =
   "How does the document relate to the user's proposition?";

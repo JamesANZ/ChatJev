@@ -1,4 +1,4 @@
-import { ChatJevError } from "./types.js";
+import { ChatJevError } from "./types";
 
 export type ExtractorInput = {
   buffer: Buffer;

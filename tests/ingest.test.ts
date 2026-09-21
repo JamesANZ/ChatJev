@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { ingestDocument, truncateToBudget } from "../src/core/ingest.js";
-import { ChatJevError, MAX_STATE_CHARS } from "../src/core/types.js";
-import { fixture } from "./helpers.js";
+import { ingestDocument, truncateToBudget } from "../src/core/ingest";
+import { ChatJevError, MAX_STATE_CHARS } from "../src/core/types";
+import { fixture } from "./helpers";
 
 describe("ingest", () => {
   it("builds a document context from extracted text", async () => {

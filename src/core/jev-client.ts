@@ -1,4 +1,4 @@
-import type { JevAnswer, JevClient, JevRequest, JevResponse } from "./types.js";
+import type { JevAnswer, JevClient, JevRequest, JevResponse } from "./types";
 
 function response(
   answers: Record<string, JevAnswer>,

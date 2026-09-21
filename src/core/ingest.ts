@@ -1,15 +1,11 @@
 import { randomUUID } from "node:crypto";
-import {
-  extractText,
-  type Extractor,
-  type ExtractorInput,
-} from "./extractors.js";
+import { extractText, type Extractor, type ExtractorInput } from "./extractors";
 import {
   ChatJevError,
   MAX_STATE_CHARS,
   MAX_UPLOAD_BYTES,
   type DocumentContext,
-} from "./types.js";
+} from "./types";
 
 export type IngestOptions = {
   extractors?: Record<string, Extractor>;

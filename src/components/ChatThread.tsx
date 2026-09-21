@@ -1,4 +1,6 @@
-import type { AskResult } from "../../core/types";
+"use client";
+
+import type { AskResult } from "@/core/types";
 import { VerdictCard } from "./VerdictCard";
 
 export type ChatItem =

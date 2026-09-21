@@ -1,11 +1,11 @@
-import { classifyQuestion, isClosedJudgment } from "./classify.js";
-import { compileEvaluation } from "./compile.js";
+import { classifyQuestion, isClosedJudgment } from "./classify";
+import { compileEvaluation } from "./compile";
 import {
   formatVerdict,
   formatVerdictMessage,
   REFUSAL_MESSAGE,
-} from "./verdict.js";
-import type { AskResult, DocumentContext, JevClient } from "./types.js";
+} from "./verdict";
+import type { AskResult, DocumentContext, JevClient } from "./types";
 
 export async function askDocument(
   client: JevClient,

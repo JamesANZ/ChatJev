@@ -1,4 +1,6 @@
-import type { SessionSummary } from "../../core/types";
+"use client";
+
+import type { SessionSummary } from "@/core/types";
 
 type FileChipProps = {
   session: SessionSummary;

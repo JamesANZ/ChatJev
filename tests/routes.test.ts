@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ingestDocument } from "../src/core/ingest.js";
-import { createApp } from "../src/server/app.js";
-import { SessionStore } from "../src/server/sessions.js";
+import { ingestDocument } from "../src/core/ingest";
+import { handleAsk, handleUpload } from "../src/lib/http";
 import {
   fixture,
   judgmentClassification,
@@ -9,41 +8,42 @@ import {
   medicalEvaluation,
   openEndedClassification,
   scriptedJev,
-} from "./helpers.js";
+} from "./helpers";
 
-async function attach(
-  app: ReturnType<typeof createApp>,
-  filename: string,
-  buffer: Buffer,
-  type = "text/plain",
-) {
+async function attach(filename: string, buffer: Buffer, type = "text/plain") {
   const form = new FormData();
   form.append("file", new File([new Uint8Array(buffer)], filename, { type }));
-  return app.request("/api/sessions", { method: "POST", body: form });
+  return handleUpload(
+    new Request("http://localhost/api/sessions", {
+      method: "POST",
+      body: form,
+    }),
+  );
 }
 
 describe("HTTP routes", () => {
   it("attaches a document then answers the medical fixture question", async () => {
-    const app = createApp({
-      jev: scriptedJev(judgmentClassification(), medicalEvaluation()),
-    });
     const created = await attach(
-      app,
       "nicotine-heart.txt",
       fixture("nicotine-heart.txt"),
     );
     expect(created.status).toBe(201);
-    const session = (await created.json()) as {
-      id: string;
+    const document = (await created.json()) as {
+      filename: string;
+      text: string;
       truncated: boolean;
     };
-    expect(session.truncated).toBe(false);
+    expect(document.truncated).toBe(false);
+    expect(document.text).toContain("nicotine");
 
-    const asked = await app.request(`/api/sessions/${session.id}/ask`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: MEDICAL_QUESTION }),
-    });
+    const asked = await handleAsk(
+      new Request("http://localhost/api/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: MEDICAL_QUESTION, document }),
+      }),
+      scriptedJev(judgmentClassification(), medicalEvaluation()),
+    );
     expect(asked.status).toBe(200);
     const body = (await asked.json()) as {
       kind: string;
@@ -58,38 +58,39 @@ describe("HTTP routes", () => {
   });
 
   it("refuses open-ended asks after a document is attached", async () => {
-    const app = createApp({ jev: scriptedJev(openEndedClassification()) });
     const created = await attach(
-      app,
       "nicotine-heart.txt",
       fixture("nicotine-heart.txt"),
     );
-    const session = (await created.json()) as { id: string };
+    const document = await created.json();
 
-    const asked = await app.request(`/api/sessions/${session.id}/ask`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: "summarize this" }),
-    });
+    const asked = await handleAsk(
+      new Request("http://localhost/api/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: "summarize this", document }),
+      }),
+      scriptedJev(openEndedClassification()),
+    );
     const body = (await asked.json()) as { kind: string; message: string };
     expect(body.kind).toBe("refusal");
     expect(body.message).toMatch(/cannot summarize/i);
   });
 
-  it("returns 404 when asking without a session", async () => {
-    const app = createApp({ jev: scriptedJev(judgmentClassification()) });
-    const asked = await app.request("/api/sessions/missing/ask", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: MEDICAL_QUESTION }),
-    });
-    expect(asked.status).toBe(404);
+  it("returns 400 when asking without a document", async () => {
+    const asked = await handleAsk(
+      new Request("http://localhost/api/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: MEDICAL_QUESTION }),
+      }),
+      scriptedJev(judgmentClassification()),
+    );
+    expect(asked.status).toBe(400);
   });
 
   it("rejects unsupported and oversized uploads", async () => {
-    const app = createApp({ jev: scriptedJev(judgmentClassification()) });
     const png = await attach(
-      app,
       "scan.png",
       Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
       "image/png",
@@ -105,23 +106,5 @@ describe("HTTP routes", () => {
       { maxBytes: 1 },
     ).catch((error: { status: number }) => error);
     expect(huge).toMatchObject({ status: 413 });
-  });
-
-  it("does not return full document text from GET /api/sessions/:id", async () => {
-    const sessions = new SessionStore();
-    const app = createApp({
-      jev: scriptedJev(judgmentClassification()),
-      sessions,
-    });
-    const created = await attach(
-      app,
-      "nicotine-heart.txt",
-      fixture("nicotine-heart.txt"),
-    );
-    const session = (await created.json()) as { id: string };
-    const fetched = await app.request(`/api/sessions/${session.id}`);
-    const body = (await fetched.json()) as Record<string, unknown>;
-    expect(body.filename).toBe("nicotine-heart.txt");
-    expect(body.text).toBeUndefined();
   });
 });

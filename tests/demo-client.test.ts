@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { askDocument } from "../src/core/ask.js";
-import { createDemoJevClient } from "../src/core/jev-client.js";
-import { ingestDocument } from "../src/core/ingest.js";
-import { fixture, MEDICAL_QUESTION } from "./helpers.js";
+import { askDocument } from "../src/core/ask";
+import { createDemoJevClient } from "../src/core/jev-client";
+import { ingestDocument } from "../src/core/ingest";
+import { fixture, MEDICAL_QUESTION } from "./helpers";
 
 describe("createDemoJevClient", () => {
   it("answers the medical fixture as a supported yes", async () => {

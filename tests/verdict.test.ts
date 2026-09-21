@@ -3,9 +3,9 @@ import {
   formatVerdict,
   formatVerdictMessage,
   REFUSAL_MESSAGE,
-} from "../src/core/verdict.js";
-import { STRENGTH_CRITERIA } from "../src/core/types.js";
-import { MEDICAL_QUESTION } from "./helpers.js";
+} from "../src/core/verdict";
+import { STRENGTH_CRITERIA } from "../src/core/types";
+import { MEDICAL_QUESTION } from "./helpers";
 
 const legend = Object.fromEntries(
   STRENGTH_CRITERIA.map((label, index) => [String(index), label]),

@@ -4,9 +4,9 @@ import {
   extractText,
   getExtractor,
   resolveMimeType,
-} from "../src/core/extractors.js";
-import { ChatJevError } from "../src/core/types.js";
-import { fixture } from "./helpers.js";
+} from "../src/core/extractors";
+import { ChatJevError } from "../src/core/types";
+import { fixture } from "./helpers";
 
 describe("extractors", () => {
   it("reads plain text, markdown, csv, and json", async () => {

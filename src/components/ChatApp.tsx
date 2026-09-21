@@ -1,17 +1,19 @@
+"use client";
+
 import { useState } from "react";
-import type { SessionSummary } from "../core/types";
-import { askSession, createSession } from "./api";
-import { ChatThread, type ChatItem } from "./components/ChatThread";
-import { DropZone } from "./components/DropZone";
-import { FileChip } from "./components/FileChip";
-import { MessageInput } from "./components/MessageInput";
+import type { DocumentContext } from "@/core/types";
+import { askAttachedDocument, uploadDocument } from "@/lib/client";
+import { ChatThread, type ChatItem } from "./ChatThread";
+import { DropZone } from "./DropZone";
+import { FileChip } from "./FileChip";
+import { MessageInput } from "./MessageInput";
 
 function nextId(): string {
   return crypto.randomUUID();
 }
 
-export function App() {
-  const [session, setSession] = useState<SessionSummary | null>(null);
+export function ChatApp() {
+  const [document, setDocument] = useState<DocumentContext | null>(null);
   const [messages, setMessages] = useState<ChatItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,8 +22,7 @@ export function App() {
     setError(null);
     setBusy(true);
     try {
-      const next = await createSession(file);
-      setSession(next);
+      setDocument(await uploadDocument(file));
       setMessages([]);
     } catch (err) {
       setError(
@@ -33,7 +34,7 @@ export function App() {
   }
 
   async function onSend(question: string) {
-    if (!session) {
+    if (!document) {
       setError("Attach a document before asking Jev.");
       return;
     }
@@ -45,7 +46,7 @@ export function App() {
     ]);
     setBusy(true);
     try {
-      const result = await askSession(session.id, question);
+      const result = await askAttachedDocument(document, question);
       setMessages((current) => [
         ...current,
         { id: nextId(), role: "assistant", result },
@@ -72,11 +73,11 @@ export function App() {
         </p>
       </header>
 
-      {session ? (
+      {document ? (
         <FileChip
-          session={session}
+          session={document}
           onClear={() => {
-            setSession(null);
+            setDocument(null);
             setMessages([]);
             setError(null);
           }}
@@ -90,7 +91,7 @@ export function App() {
         pending={busy && messages.at(-1)?.role === "user"}
       />
       {error ? <p className="error">{error}</p> : null}
-      <MessageInput disabled={!session || busy} onSend={onSend} />
+      <MessageInput disabled={!document || busy} onSend={onSend} />
     </main>
   );
 }

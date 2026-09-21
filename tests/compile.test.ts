@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { compileEvaluation, RELATION_CRITERIA } from "../src/core/compile.js";
-import { STRENGTH_CRITERIA } from "../src/core/types.js";
-import { MEDICAL_QUESTION } from "./helpers.js";
+import { compileEvaluation, RELATION_CRITERIA } from "../src/core/compile";
+import { STRENGTH_CRITERIA } from "../src/core/types";
+import { MEDICAL_QUESTION } from "./helpers";
 
 describe("compileEvaluation", () => {
   it("uses the user question as the noul instructions", () => {

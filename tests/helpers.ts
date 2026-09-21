@@ -6,12 +6,12 @@ import {
   FakeJevClient,
   noulAnswer,
   scoreAnswer,
-} from "../src/core/jev-client.js";
+} from "../src/core/jev-client";
 import {
   STRENGTH_CRITERIA,
   type JevRequest,
   type JevResponse,
-} from "../src/core/types.js";
+} from "../src/core/types";
 
 const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 

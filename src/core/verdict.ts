@@ -1,4 +1,4 @@
-import { requireChoice, requireNoul, requireScore } from "./jev-client.js";
+import { requireChoice, requireNoul, requireScore } from "./jev-client";
 import {
   STRENGTH_CRITERIA,
   UNSURE_HIGH,
@@ -7,7 +7,7 @@ import {
   type Leaning,
   type Relation,
   type Verdict,
-} from "./types.js";
+} from "./types";
 
 export const REFUSAL_MESSAGE =
   "Jev cannot summarize, explain, or rewrite a document. Ask whether the attached document supports, contradicts, or is silent on a specific claim.";

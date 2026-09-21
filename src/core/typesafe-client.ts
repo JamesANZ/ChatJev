@@ -10,7 +10,7 @@ import {
   type JevClient,
   type JevRequest,
   type JevResponse,
-} from "./types.js";
+} from "./types";
 
 function toSdkQuestions(questions: JevRequest["questions"]) {
   return Object.fromEntries(

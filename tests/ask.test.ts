@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { askDocument } from "../src/core/ask.js";
-import { ingestDocument } from "../src/core/ingest.js";
+import { askDocument } from "../src/core/ask";
+import { ingestDocument } from "../src/core/ingest";
 import {
   fixture,
   judgmentClassification,
@@ -8,7 +8,7 @@ import {
   medicalEvaluation,
   openEndedClassification,
   scriptedJev,
-} from "./helpers.js";
+} from "./helpers";
 
 describe("askDocument", () => {
   it("runs classify then evaluate for the nicotine fixture", async () => {
