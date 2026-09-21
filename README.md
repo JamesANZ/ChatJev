@@ -6,6 +6,8 @@ Jev is not a chat model. It takes extracted text as `state` and returns typed ju
 
 The TypeSafe key stays on the server. The browser only uploads a file and asks questions.
 
+![ChatJev verdict after attaching a document and asking a closed question](docs/screenshot.jpg)
+
 ## Feasibility
 
 | Layer                                      | Generic?  | What ChatJev does                                                                        |
