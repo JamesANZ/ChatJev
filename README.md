@@ -89,3 +89,7 @@ tests/           Vitest
 - A generative model that writes prose around the verdict
 - Durable session storage
 - Streaming (Jev has no stream endpoint)
+
+## License
+
+[MIT](LICENSE)

@@ -2,6 +2,7 @@
   "name": "chatjev",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Attach a document and ask Jev closed questions about it.",
   "scripts": {
     "dev": "next dev",
