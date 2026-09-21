@@ -1,0 +1,40 @@
+{
+  "name": "chatjev",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Attach a document and ask Jev closed questions about it.",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c cyan,magenta \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "tsx watch src/server/index.ts",
+    "dev:web": "vite",
+    "build": "tsc -p tsconfig.build.json && vite build",
+    "start": "node --env-file=.env dist/server/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.1",
+    "@typesafe-ai/sdk": "^0.6.0",
+    "hono": "^4.9.8",
+    "mammoth": "^1.9.1",
+    "pdf-parse": "^1.1.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.1",
+    "@types/pdf-parse": "^1.1.5",
+    "@types/react": "^18.3.24",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "concurrently": "^9.2.1",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.4"
+  }
+}

@@ -1,0 +1,269 @@
+:root {
+  --paper: #f4efe4;
+  --paper-deep: #ebe4d4;
+  --ink: #1c1914;
+  --ink-soft: #5c564c;
+  --rule: #d4ccb8;
+  --yes: #0f5c4c;
+  --yes-fill: #d8efe6;
+  --no: #8f3328;
+  --no-fill: #f3ddd8;
+  --unsure: #8a6a1f;
+  --unsure-fill: #f4e8c6;
+  --card: #fffdf8;
+  --shadow: 0 12px 40px rgba(28, 25, 20, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(15, 92, 76, 0.06),
+      transparent 28%
+    ),
+    var(--paper);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", sans-serif;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+.app {
+  max-width: 880px;
+  margin: 0 auto;
+  min-height: 100vh;
+  padding: 32px 20px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.masthead h1 {
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 2.4rem;
+  letter-spacing: -0.03em;
+  margin: 0 0 8px;
+}
+
+.masthead p {
+  margin: 0;
+  max-width: 46rem;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.dropzone {
+  border: 1.5px dashed #b7ae96;
+  background: rgba(255, 253, 248, 0.7);
+  border-radius: 16px;
+  padding: 28px;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.dropzone:hover,
+.dropzone.active {
+  border-color: var(--yes);
+  background: #fff;
+}
+
+.dropzone strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.dropzone span {
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+}
+
+.dropzone input {
+  display: none;
+}
+
+.file-chip,
+.notice,
+.verdict,
+.bubble,
+.composer {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  box-shadow: var(--shadow);
+}
+
+.file-chip {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: 14px;
+}
+
+.file-chip b {
+  display: block;
+}
+
+.file-chip small,
+.meta {
+  color: var(--ink-soft);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+}
+
+.warning {
+  color: var(--unsure);
+  margin-top: 6px;
+}
+
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1;
+}
+
+.bubble {
+  align-self: flex-end;
+  max-width: 80%;
+  padding: 12px 14px;
+  border-radius: 16px 16px 4px 16px;
+  line-height: 1.45;
+}
+
+.verdict,
+.notice {
+  border-radius: 16px;
+  padding: 18px;
+}
+
+.notice {
+  color: var(--ink-soft);
+}
+
+.verdict h2 {
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.25rem;
+  line-height: 1.4;
+  margin: 0 0 14px;
+}
+
+.meter {
+  height: 10px;
+  background: var(--paper-deep);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.verdict.yes .meter > span {
+  background: var(--yes);
+}
+
+.verdict.no .meter > span {
+  background: var(--no);
+}
+
+.verdict.unsure .meter > span {
+  background: var(--unsure);
+}
+
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.pill {
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.82rem;
+}
+
+.pill.yes {
+  background: var(--yes-fill);
+  color: var(--yes);
+}
+
+.pill.no {
+  background: var(--no-fill);
+  color: var(--no);
+}
+
+.pill.unsure {
+  background: var(--unsure-fill);
+  color: var(--unsure);
+}
+
+.verdict ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--ink-soft);
+}
+
+.composer {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 16px;
+}
+
+.composer textarea {
+  flex: 1;
+  resize: none;
+  min-height: 52px;
+  border: 0;
+  background: transparent;
+  outline: none;
+}
+
+.composer button,
+.file-chip button {
+  border: 0;
+  border-radius: 12px;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.composer button:disabled,
+.file-chip button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.error {
+  color: var(--no);
+}
+
+.empty {
+  color: var(--ink-soft);
+  text-align: center;
+  padding: 12px 8px 0;
+}
