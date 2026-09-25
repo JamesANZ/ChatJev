@@ -25,7 +25,12 @@ export type SessionSummary = {
 
 export type Relation = "supported" | "contradicted" | "not_mentioned";
 export type QuestionKind = "judgment" | "open_ended";
+export type RouteKind = "jev" | "llm" | "media";
+export type InjectionKind = "clean" | "injection" | "jailbreak";
+export type EvidenceOrigin = "document" | "web";
 export type Leaning = "yes" | "no" | "unsure";
+export const INJECTION_NOUL_THRESHOLD = 0.6;
+export const RELEVANCE_NOUL_THRESHOLD = 0.6;
 
 export type JevUsage = {
   input_tokens: number;
@@ -97,6 +102,34 @@ export type Classification = {
   usage: JevUsage;
 };
 
+export type Triage = Classification & {
+  route: RouteKind;
+  injectionNoul: number;
+  injectionKind: InjectionKind;
+  blocked: boolean;
+};
+
+export type WebSource = {
+  title: string;
+  url: string;
+  snippet?: string;
+};
+
+export type EvidencePack = {
+  origin: EvidenceOrigin;
+  filename: string;
+  text: string;
+  truncated: boolean;
+  sources: WebSource[];
+};
+
+export type Passage = {
+  id: string;
+  title: string;
+  url: string;
+  text: string;
+};
+
 export const STRENGTH_CRITERIA = [
   "None or off-topic",
   "Indirect or weak",
@@ -125,12 +158,53 @@ export type AskResult =
       model: string;
       usage: JevUsage;
       answers: Record<string, JevAnswer>;
+      evidence: EvidencePack;
     }
   | {
       kind: "refusal";
       question: string;
       message: string;
+    }
+  | {
+      kind: "blocked";
+      question: string;
+      message: string;
+      noul: number;
+      injectionKind: InjectionKind;
+    }
+  | {
+      kind: "llm";
+      question: string;
+      message: string;
+      model: string;
+    }
+  | {
+      kind: "unsupported_media";
+      question: string;
+      message: string;
     };
+
+export interface WebSearchClient {
+  search(query: string): Promise<WebSource[]>;
+  fetchPage(url: string): Promise<{ title: string; url: string; text: string }>;
+}
+
+export interface LlmClient {
+  complete(input: {
+    prompt: string;
+    evidence?: string;
+  }): Promise<{ text: string; model: string }>;
+}
+
+export function sumUsage(...usages: Array<JevUsage | undefined>): JevUsage {
+  return usages.reduce<JevUsage>(
+    (total, usage) => ({
+      input_tokens: total.input_tokens + (usage?.input_tokens ?? 0),
+      output_tokens: total.output_tokens + (usage?.output_tokens ?? 0),
+    }),
+    { input_tokens: 0, output_tokens: 0 },
+  );
+}
 
 export class ChatJevError extends Error {
   readonly status: number;

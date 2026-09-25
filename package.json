@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
-  "description": "Attach a document and ask Jev closed questions about it.",
+  "description": "Ask Jev closed questions; ChatJev searches the web and falls through to an LLM only when needed.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

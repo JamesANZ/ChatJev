@@ -83,7 +83,9 @@ describe("extractors", () => {
   it("rejects images and unknown binaries", () => {
     const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
     expect(() => getExtractor("scan.png", "image/png")).toThrow(ChatJevError);
-    expect(() => getExtractor("scan.png", "image/png")).toThrow(/cannot read/i);
+    expect(() => getExtractor("scan.png", "image/png")).toThrow(
+      /cannot analyze photos/i,
+    );
     expect(resolveMimeType("scan.png", "image/png")).toBe("image/png");
     expect(png[0]).toBe(137);
   });

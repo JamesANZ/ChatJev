@@ -19,12 +19,12 @@ export async function uploadDocument(file: File): Promise<DocumentContext> {
   return (await response.json()) as DocumentContext;
 }
 
-export async function askAttachedDocument(
-  document: Pick<
+export async function askQuestion(
+  question: string,
+  document?: Pick<
     DocumentContext,
     "id" | "filename" | "mimeType" | "text" | "truncated"
   >,
-  question: string,
 ): Promise<AskResult> {
   const response = await fetch("/api/ask", {
     method: "POST",
@@ -35,4 +35,14 @@ export async function askAttachedDocument(
     throw new Error(await readError(response));
   }
   return (await response.json()) as AskResult;
+}
+
+export async function askAttachedDocument(
+  document: Pick<
+    DocumentContext,
+    "id" | "filename" | "mimeType" | "text" | "truncated"
+  >,
+  question: string,
+): Promise<AskResult> {
+  return askQuestion(question, document);
 }

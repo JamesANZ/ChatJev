@@ -45,7 +45,30 @@ function decodeUtf8(buffer: Buffer): string {
   return buffer.toString("utf8").replace(/^\uFEFF/, "");
 }
 
-function stripHtml(html: string): string {
+const MEDIA_EXTENSIONS = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
+  ".bmp",
+  ".tif",
+  ".tiff",
+  ".heic",
+  ".mp3",
+  ".wav",
+  ".m4a",
+  ".ogg",
+  ".flac",
+  ".aac",
+  ".mp4",
+  ".mov",
+  ".webm",
+]);
+
+const MEDIA_MIME_PREFIXES = ["image/", "audio/", "video/"];
+
+export function stripHtml(html: string): string {
   return html
     .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, " ")
@@ -58,6 +81,14 @@ function stripHtml(html: string): string {
     .replace(/&#39;/g, "'")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+export function isMediaUpload(filename: string, mimeType: string): boolean {
+  const normalized = (mimeType || "").split(";")[0].trim().toLowerCase();
+  if (MEDIA_MIME_PREFIXES.some((prefix) => normalized.startsWith(prefix))) {
+    return true;
+  }
+  return MEDIA_EXTENSIONS.has(extensionOf(filename));
 }
 
 function formatJson(raw: string): string {
@@ -111,6 +142,23 @@ export function resolveMimeType(filename: string, mimeType: string): string {
     case ".docx":
     case ".doc":
       return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    case ".png":
+      return "image/png";
+    case ".jpg":
+    case ".jpeg":
+      return "image/jpeg";
+    case ".gif":
+      return "image/gif";
+    case ".webp":
+      return "image/webp";
+    case ".mp3":
+      return "audio/mpeg";
+    case ".wav":
+      return "audio/wav";
+    case ".m4a":
+      return "audio/mp4";
+    case ".mp4":
+      return "video/mp4";
     default:
       return normalized || "application/octet-stream";
   }
@@ -158,6 +206,13 @@ export function getExtractor(
   const resolved = resolveMimeType(filename, mimeType);
   const extractor = extractors[resolved];
   if (!extractor) {
+    if (isMediaUpload(filename, resolved)) {
+      throw new ChatJevError(
+        415,
+        "unsupported_media",
+        `Jev cannot analyze photos, audio, or video. ${filename || "This file"} is media — attach a transcript, caption, or text document, or ask a closed text question.`,
+      );
+    }
     throw new ChatJevError(
       415,
       "unsupported_type",

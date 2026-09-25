@@ -266,3 +266,48 @@ textarea {
   text-align: center;
   padding: 12px 8px 0;
 }
+
+.howto {
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.howto summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.howto ul {
+  margin: 10px 0 0;
+  padding-left: 1.2rem;
+}
+
+.howto code {
+  font-family: var(--font-mono), "IBM Plex Mono", monospace;
+  font-size: 0.82em;
+}
+
+.sources {
+  margin-top: 12px;
+}
+
+.sources a {
+  color: var(--yes);
+}
+
+.notice.blocked {
+  border-color: #e3c0ba;
+  background: var(--no-fill);
+  color: var(--no);
+}
+
+.verdict.llm h2,
+.verdict.llm p {
+  margin: 0 0 10px;
+}
+
+.verdict.llm p:last-child {
+  margin-bottom: 0;
+}

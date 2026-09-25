@@ -7,3 +7,7 @@ export * from "./classify";
 export * from "./compile";
 export * from "./verdict";
 export * from "./ask";
+export * from "./triage";
+export * from "./search";
+export * from "./llm";
+export * from "./prompt";

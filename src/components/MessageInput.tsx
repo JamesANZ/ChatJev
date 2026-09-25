@@ -36,7 +36,7 @@ export function MessageInput({ disabled, onSend }: MessageInputProps) {
         disabled={disabled}
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={onKeyDown}
-        placeholder="Ask whether the document supports a specific claim"
+        placeholder="Ask a closed question — attach a document or ChatJev will search the web"
         rows={2}
       />
       <button type="submit" disabled={disabled || !value.trim()}>

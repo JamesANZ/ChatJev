@@ -9,15 +9,15 @@ export type ChatItem =
 
 type ChatThreadProps = {
   messages: ChatItem[];
-  pending?: boolean;
+  pending?: string | boolean;
 };
 
 export function ChatThread({ messages, pending }: ChatThreadProps) {
   if (messages.length === 0 && !pending) {
     return (
       <p className="empty">
-        Ask a closed question, for example: does this document strongly suggest
-        a correlation between nicotine and heart disease?
+        Try: does nicotine increase heart-disease risk? Attach a document, or
+        let ChatJev search the web and have Jev judge the sources.
       </p>
     );
   }
@@ -34,7 +34,9 @@ export function ChatThread({ messages, pending }: ChatThreadProps) {
         ),
       )}
       {pending ? (
-        <section className="notice">Jev is judging the document…</section>
+        <section className="notice">
+          {typeof pending === "string" ? pending : "Jev is judging…"}
+        </section>
       ) : null}
     </div>
   );
