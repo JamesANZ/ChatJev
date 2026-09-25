@@ -29,10 +29,10 @@ export function DropZone({ disabled, onFile }: DropZoneProps) {
         takeFile(event.dataTransfer.files);
       }}
     >
-      <strong>Attach a document</strong>
+      <strong>Optional evidence</strong>
       <span>
-        TXT, Markdown, CSV, JSON, HTML, PDF, or DOCX. Jev reads extracted text
-        only.
+        TXT, Markdown, CSV, JSON, HTML, PDF, or DOCX. Skip this and ChatJev
+        will scrape the web. Jev cannot read photos or audio.
       </span>
       <input
         type="file"

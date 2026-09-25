@@ -1,9 +1,11 @@
-import { askDocument } from "@/core/ask";
 import { ingestDocument } from "@/core/ingest";
+import { askPrompt } from "@/core/prompt";
 import {
   ChatJevError,
   type DocumentContext,
   type JevClient,
+  type LlmClient,
+  type WebSearchClient,
 } from "@/core/types";
 
 function json(body: unknown, status = 200): Response {
@@ -45,6 +47,10 @@ export async function handleUpload(request: Request): Promise<Response> {
 export async function handleAsk(
   request: Request,
   jev: JevClient,
+  options: {
+    search?: WebSearchClient;
+    llm?: LlmClient | null;
+  } = {},
 ): Promise<Response> {
   try {
     const payload = (await request.json().catch(() => ({}))) as {
@@ -64,31 +70,25 @@ export async function handleAsk(
 
     const text = payload.document?.text;
     const filename = payload.document?.filename;
-    if (
-      typeof text !== "string" ||
-      typeof filename !== "string" ||
-      !text ||
-      !filename
-    ) {
-      return json(
-        {
-          error: "Attach a document first, then ask a question.",
-          code: "missing_document",
-        },
-        400,
-      );
-    }
+    const document =
+      typeof text === "string" && typeof filename === "string" && text && filename
+        ? {
+            id: payload.document?.id ?? "client",
+            filename,
+            mimeType: payload.document?.mimeType ?? "text/plain",
+            text,
+            charCount: text.length,
+            truncated: Boolean(payload.document?.truncated),
+          }
+        : undefined;
 
-    const document: DocumentContext = {
-      id: payload.document?.id ?? "client",
-      filename,
-      mimeType: payload.document?.mimeType ?? "text/plain",
-      text,
-      charCount: text.length,
-      truncated: Boolean(payload.document?.truncated),
-    };
-
-    return json(await askDocument(jev, document, payload.question));
+    return json(
+      await askPrompt(jev, payload.question, {
+        document,
+        search: options.search,
+        llm: options.llm,
+      }),
+    );
   } catch (error) {
     return errorResponse(error);
   }

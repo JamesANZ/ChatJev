@@ -68,50 +68,94 @@ export function requireChoice<T extends string>(
   };
 }
 
+function looksLikeOpenEnded(question: string): boolean {
+  return /\b(summarize|explain|rewrite|what does it say|write me|draft|brainstorm)\b/i.test(
+    question,
+  );
+}
+
+function looksLikeInjection(question: string): boolean {
+  return /\b(ignore (all )?(previous|prior|above) instructions|you are now\b|system prompt|developer mode|jailbreak|forget (your|all) (instructions|rules))\b/i.test(
+    question,
+  );
+}
+
+function looksLikeMedia(question: string): boolean {
+  return /\b(this (photo|picture|image|screenshot|recording|audio|clip|video)|what do you (see|hear)|describe (this )?(photo|image|picture|audio)|transcribe|listen to this)\b/i.test(
+    question,
+  );
+}
+
+function overlapNoul(query: string, haystack: string): number {
+  const tokens = query
+    .toLowerCase()
+    .split(/\W+/)
+    .filter((word) => word.length > 4);
+  if (tokens.length === 0) return 0.5;
+  const hits = tokens.filter((word) => haystack.includes(word)).length;
+  return Math.min(0.95, 0.15 + (0.8 * hits) / tokens.length);
+}
+
 export function createDemoJevClient(): JevClient {
   return new FakeJevClient((request) => {
-    const state = (request.state ?? {}) as {
-      user_question?: string;
-      document?: string;
-    };
-    const question = state.user_question ?? "";
-    const openEnded = /\b(summarize|explain|rewrite|what does it say)\b/i.test(
-      question,
-    );
+    const state = (request.state ?? {}) as Record<string, string | undefined>;
+    const question = state.user_question ?? state.query ?? "";
+    const keys = Object.keys(request.questions);
+
+    if (keys.some((key) => key.startsWith("relevant_"))) {
+      const answers: Record<string, ReturnType<typeof noulAnswer>> = {};
+      keys
+        .filter((key) => key.startsWith("relevant_"))
+        .forEach((key) => {
+          const index = key.slice("relevant_".length);
+          const passage = String(state[`passage_${index}`] ?? "");
+          answers[key] = noulAnswer(overlapNoul(question, passage.toLowerCase()));
+          answers[`hostile_${index}`] = noulAnswer(
+            looksLikeInjection(passage) ? 0.86 : 0.08,
+          );
+        });
+      return response(answers, { input_tokens: 40, output_tokens: 10 });
+    }
 
     if (!state.document) {
+      const injection = looksLikeInjection(question);
+      const media = looksLikeMedia(question);
+      const openEnded = looksLikeOpenEnded(question);
+      const route = media ? "media" : openEnded ? "llm" : "jev";
       return response(
-        openEnded
-          ? {
-              is_judgment: noulAnswer(0.12),
-              kind: choiceAnswer(
-                "open_ended",
-                { judgment: 0.08, open_ended: 0.92 },
-                0.88,
-              ),
-            }
-          : {
-              is_judgment: noulAnswer(0.93),
-              kind: choiceAnswer(
-                "judgment",
-                { judgment: 0.94, open_ended: 0.06 },
-                0.91,
-              ),
+        {
+          is_judgment: noulAnswer(openEnded || media ? 0.12 : 0.93),
+          kind: choiceAnswer(
+            openEnded || media ? "open_ended" : "judgment",
+            openEnded || media
+              ? { judgment: 0.08, open_ended: 0.92 }
+              : { judgment: 0.94, open_ended: 0.06 },
+            0.9,
+          ),
+          route: choiceAnswer(
+            route,
+            {
+              jev: route === "jev" ? 0.9 : 0.05,
+              llm: route === "llm" ? 0.9 : 0.05,
+              media: route === "media" ? 0.9 : 0.05,
             },
-        { input_tokens: 24, output_tokens: 6 },
+            0.88,
+          ),
+          is_injection: noulAnswer(injection ? 0.91 : 0.08),
+          injection_kind: choiceAnswer(
+            injection ? "jailbreak" : "clean",
+            injection
+              ? { clean: 0.06, injection: 0.2, jailbreak: 0.74 }
+              : { clean: 0.92, injection: 0.05, jailbreak: 0.03 },
+            0.87,
+          ),
+        },
+        { input_tokens: 28, output_tokens: 10 },
       );
     }
 
-    const tokens = question
-      .toLowerCase()
-      .split(/\W+/)
-      .filter((word) => word.length > 4);
     const haystack = (state.document ?? "").toLowerCase();
-    const hits = tokens.filter((word) => haystack.includes(word)).length;
-    const noul =
-      tokens.length === 0
-        ? 0.5
-        : Math.min(0.95, 0.15 + (0.8 * hits) / tokens.length);
+    const noul = overlapNoul(question, haystack);
     const relation =
       noul >= 0.6
         ? "supported"

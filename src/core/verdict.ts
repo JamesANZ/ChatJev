@@ -3,6 +3,7 @@ import {
   STRENGTH_CRITERIA,
   UNSURE_HIGH,
   UNSURE_LOW,
+  type EvidenceOrigin,
   type JevAnswer,
   type Leaning,
   type Relation,
@@ -10,7 +11,7 @@ import {
 } from "./types";
 
 export const REFUSAL_MESSAGE =
-  "Jev cannot summarize, explain, or rewrite a document. Ask whether the attached document supports, contradicts, or is silent on a specific claim.";
+  "Jev cannot summarize, explain, or rewrite. Ask whether the evidence supports, contradicts, or is silent on a specific claim.";
 
 function percent(value: number): string {
   return `${Math.round(value * 100)}%`;
@@ -43,14 +44,25 @@ function headlineFor(question: string, noul: number, leaning: Leaning): string {
   return `Jev thinks no with a ${percent(1 - noul)} probability (yes-probability ${percent(noul)}) for ${quoted}.`;
 }
 
-function relationSentence(relation: Relation, confidence: number): string {
-  const label =
-    relation === "supported"
+function relationSentence(
+  relation: Relation,
+  confidence: number,
+  origin?: EvidenceOrigin,
+): string {
+  const web = origin === "web";
+  const actor = web ? "retrieved sources" : "document";
+  const verb = web
+    ? relation === "supported"
+      ? "support"
+      : relation === "contradicted"
+        ? "contradict"
+        : "do not mention"
+    : relation === "supported"
       ? "supports"
       : relation === "contradicted"
         ? "contradicts"
         : "does not mention";
-  return `The document ${label} the proposition (confidence ${percent(confidence)}).`;
+  return `The ${actor} ${verb} the proposition (confidence ${percent(confidence)}).`;
 }
 
 function strengthSentence(label: string, score: number, max: number): string {
@@ -60,6 +72,7 @@ function strengthSentence(label: string, score: number, max: number): string {
 export function formatVerdict(
   question: string,
   answers: Record<string, JevAnswer>,
+  origin?: EvidenceOrigin,
 ): Verdict {
   const noul = requireNoul(answers.proposition, "proposition");
   const relation = requireChoice<Relation>(answers.relation, "relation");
@@ -70,7 +83,7 @@ export function formatVerdict(
 
   const headline = headlineFor(question, noul, leaning);
   const details = [
-    relationSentence(relation.choice, relation.confidence),
+    relationSentence(relation.choice, relation.confidence, origin),
     strengthSentence(label, strength.score, strengthMax),
   ];
 

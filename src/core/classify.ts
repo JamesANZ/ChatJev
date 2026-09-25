@@ -7,7 +7,7 @@ import {
 } from "./types";
 
 export const CLASSIFY_IS_JUDGMENT =
-  "Is the user asking whether the attached document supports, contradicts, or is silent on a specific claim or proposition?";
+  "Is the user asking whether supplied evidence supports, contradicts, or is silent on a specific claim or proposition?";
 
 export const CLASSIFY_KIND = "What kind of request is this user question?";
 

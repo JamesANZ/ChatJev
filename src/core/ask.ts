@@ -1,5 +1,6 @@
 import { classifyQuestion, isClosedJudgment } from "./classify";
 import { compileEvaluation } from "./compile";
+import { evidenceFromDocument } from "./search";
 import {
   formatVerdict,
   formatVerdictMessage,
@@ -32,7 +33,8 @@ export async function askDocument(
 
   const request = compileEvaluation(document.filename, document.text, trimmed);
   const response = await client.evaluate(request);
-  const verdict = formatVerdict(trimmed, response.answers);
+  const evidence = evidenceFromDocument(document);
+  const verdict = formatVerdict(trimmed, response.answers, evidence.origin);
 
   return {
     kind: "verdict",
@@ -42,5 +44,6 @@ export async function askDocument(
     model: response.model,
     usage: response.usage,
     answers: response.answers,
+    evidence,
   };
 }
