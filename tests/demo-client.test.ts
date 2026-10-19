@@ -18,12 +18,12 @@ describe("createDemoJevClient", () => {
     );
     expect(result.kind).toBe("verdict");
     if (result.kind === "verdict") {
-      expect(result.judgments.find((item) => item.key === "proposition")?.leaning).toBe(
-        "yes",
-      );
-      expect(result.judgments.find((item) => item.key === "relation")?.choice).toBe(
-        "supported",
-      );
+      expect(
+        result.judgments.find((item) => item.key === "proposition")?.leaning,
+      ).toBe("yes");
+      expect(
+        result.judgments.find((item) => item.key === "relation")?.choice,
+      ).toBe("supported");
     }
   });
 

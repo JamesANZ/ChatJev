@@ -3,6 +3,15 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import type { DocumentContext } from "@/core/types";
 import { askAttachedDocument, uploadDocument } from "@/lib/client";
+import {
+  appendMessage,
+  deleteChat,
+  loadHistory,
+  saveChat,
+  saveHistory,
+  setChatDocument,
+  type ChatHistory,
+} from "@/lib/chat-history";
 import { ChatThread, type ChatItem } from "./ChatThread";
 import { DropZone } from "./DropZone";
 import { FileChip } from "./FileChip";
@@ -21,6 +30,8 @@ const SUGGESTIONS = [
   "How confident should I be in this answer?",
 ];
 
+const EMPTY_HISTORY: ChatHistory = { activeId: null, chats: [] };
+
 function nextId(): string {
   return crypto.randomUUID();
 }
@@ -29,16 +40,57 @@ function hasFiles(event: DragEvent) {
   return Array.from(event.dataTransfer?.types ?? []).includes("Files");
 }
 
+function useDesktopLayout() {
+  const [desktop, setDesktop] = useState(true);
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 641px)");
+    const update = () => setDesktop(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  return desktop;
+}
+
 export function ChatApp() {
-  const [document, setDocument] = useState<DocumentContext | null>(null);
-  const [messages, setMessages] = useState<ChatItem[]>([]);
+  const [history, setHistory] = useState<ChatHistory>(EMPTY_HISTORY);
+  const [draftDocument, setDraftDocument] = useState<DocumentContext | null>(
+    null,
+  );
+  const [hydrated, setHydrated] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [pendingChatId, setPendingChatId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [setupNotices, setSetupNotices] = useState<string[]>([]);
   const [askNotice, setAskNotice] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const desktop = useDesktopLayout();
   const stageRef = useRef<HTMLDivElement>(null);
-  const request = useRef(0);
+
+  const active =
+    history.chats.find((chat) => chat.id === history.activeId) ?? null;
+  const messages = active?.messages ?? [];
+  const document = active ? active.document : draftDocument;
+
+  useEffect(() => {
+    setHistory(loadHistory(window.localStorage));
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    saveHistory(history, window.localStorage);
+  }, [history, hydrated]);
+
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setSidebarOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sidebarOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,43 +117,58 @@ export function ChatApp() {
   }, [messages, busy]);
 
   async function onFile(file: File) {
-    const id = ++request.current;
+    if (busy) return;
+    const chatId = active?.id ?? null;
     setError(null);
     setBusy(true);
     try {
       const uploaded = await uploadDocument(file);
-      if (request.current !== id) return;
-      setDocument(uploaded);
-      setMessages([]);
+      if (chatId) {
+        setHistory((current) => setChatDocument(current, chatId, uploaded));
+      } else {
+        setDraftDocument(uploaded);
+      }
       setAskNotice(null);
     } catch (err) {
-      if (request.current !== id) return;
       setError(
         err instanceof Error ? err.message : "Could not attach that document.",
       );
     } finally {
-      if (request.current === id) setBusy(false);
+      setBusy(false);
     }
   }
 
   async function onSend(question: string) {
-    const id = ++request.current;
+    if (busy) return;
+    const chatId = active?.id ?? nextId();
+    const attached = document;
+    const userMessage: ChatItem = { id: nextId(), role: "user", text: question };
     setError(null);
-    setMessages((current) => [
-      ...current,
-      { id: nextId(), role: "user", text: question },
-    ]);
+    setHistory((current) => {
+      const open =
+        current.chats.find((chat) => chat.id === current.activeId) ?? null;
+      return saveChat(current, {
+        id: open?.id ?? chatId,
+        title: "",
+        updatedAt: Date.now(),
+        messages: [...(open?.messages ?? []), userMessage],
+        document: open ? open.document : attached,
+      });
+    });
+    setDraftDocument(null);
+    setPendingChatId(chatId);
     setBusy(true);
     try {
-      const result = await askAttachedDocument(document, question);
-      if (request.current !== id) return;
+      const result = await askAttachedDocument(attached, question);
       setAskNotice(result.kind === "verdict" ? (result.warning ?? null) : null);
-      setMessages((current) => [
-        ...current,
-        { id: nextId(), role: "assistant", result },
-      ]);
+      setHistory((current) =>
+        appendMessage(current, chatId, {
+          id: nextId(),
+          role: "assistant",
+          result,
+        }),
+      );
     } catch (err) {
-      if (request.current !== id) return;
       const message =
         err instanceof Error
           ? err.message
@@ -118,14 +185,41 @@ export function ChatApp() {
         setError(message);
       }
     } finally {
-      if (request.current === id) setBusy(false);
+      setBusy(false);
+      setPendingChatId((current) => (current === chatId ? null : current));
     }
   }
 
   function onNewChat() {
-    request.current += 1;
-    setBusy(false);
-    setMessages([]);
+    setHistory((current) => ({ ...current, activeId: null }));
+    setDraftDocument(null);
+    setError(null);
+    setAskNotice(null);
+    setSidebarOpen(false);
+  }
+
+  function onSelectChat(chatId: string) {
+    setHistory((current) => ({ ...current, activeId: chatId }));
+    setDraftDocument(null);
+    setError(null);
+    setAskNotice(null);
+    setSidebarOpen(false);
+  }
+
+  function onDeleteChat(chatId: string) {
+    if (history.activeId === chatId) setDraftDocument(null);
+    setHistory((current) => deleteChat(current, chatId));
+    setError(null);
+    setAskNotice(null);
+  }
+
+  function onClearDocument() {
+    if (active) {
+      const chatId = active.id;
+      setHistory((current) => setChatDocument(current, chatId, null));
+    } else {
+      setDraftDocument(null);
+    }
     setError(null);
     setAskNotice(null);
   }
@@ -158,6 +252,7 @@ export function ChatApp() {
 
   const notices = [...setupNotices, ...(askNotice ? [askNotice] : [])];
   const empty = messages.length === 0;
+  const hasHistory = history.chats.length > 0;
 
   return (
     <main
@@ -167,114 +262,190 @@ export function ChatApp() {
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
-      <header className="topbar">
-        <div className="topbar-side" />
-        <div className="brand">ChatJev</div>
-        <div className="topbar-side end">
-          {empty ? null : (
+      {hasHistory ? (
+        <>
+          {sidebarOpen ? (
             <button
               type="button"
-              className="text-btn"
-              onClick={onNewChat}
-              disabled={busy}
-            >
-              New chat
-            </button>
-          )}
-        </div>
-      </header>
-
-      {notices.length > 0 ? (
-        <div className="banner-wrap">
-          <div className="setup-warning" role="alert">
-            {notices.map((notice) => (
-              <p key={notice}>{notice}</p>
-            ))}
-          </div>
-        </div>
+              className="sidebar-backdrop"
+              aria-label="Close chat history"
+              onClick={() => setSidebarOpen(false)}
+            />
+          ) : null}
+          <aside
+            className={sidebarOpen ? "sidebar open" : "sidebar"}
+            aria-label="Chat history"
+            aria-hidden={!desktop && !sidebarOpen}
+            inert={!desktop && !sidebarOpen ? true : undefined}
+          >
+            <div className="sidebar-head">
+              <button
+                type="button"
+                className="text-btn"
+                onClick={onNewChat}
+                disabled={busy}
+              >
+                New chat
+              </button>
+            </div>
+            <div className="chat-list">
+              {history.chats.map((chat) => (
+                <div
+                  key={chat.id}
+                  className={
+                    chat.id === history.activeId ? "chat-row active" : "chat-row"
+                  }
+                >
+                  <button
+                    type="button"
+                    className="chat-open"
+                    title={chat.title}
+                    aria-current={
+                      chat.id === history.activeId ? "true" : undefined
+                    }
+                    onClick={() => onSelectChat(chat.id)}
+                  >
+                    {chat.title}
+                  </button>
+                  <button
+                    type="button"
+                    className="chat-delete"
+                    aria-label={`Delete ${chat.title}`}
+                    disabled={busy}
+                    onClick={() => onDeleteChat(chat.id)}
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 14 14"
+                      fill="none"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M3.5 3.5 10.5 10.5M10.5 3.5 3.5 10.5"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          </aside>
+        </>
       ) : null}
 
-      <div className="stage" ref={stageRef}>
-        {empty ? (
-          <div className="hero">
-            <h1>What should Jev judge?</h1>
-            <p className="hero-lead">
-              Chat with Jev in plain language. It scores sources instead of
-              writing the answer, so it typically cannot invent facts.
-            </p>
-            <ol className="hero-steps">
-              <li>
-                <h2>Ask like a normal chatbot</h2>
-                <p>
-                  An LLM and a web scraper turn your question into something
-                  Jev can judge.
-                </p>
-              </li>
-              <li>
-                <h2>Give Jev the sources</h2>
-                <p>
-                  If a file does not answer, ChatJev looks the question up and
-                  passes those sources along.
-                </p>
-              </li>
-              <li>
-                <h2>Read the scores back</h2>
-                <p>ChatJev turns Jev’s result into a reply.</p>
-              </li>
-            </ol>
-            <div className="suggestions">
-              {SUGGESTIONS.map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  className="suggestion"
-                  disabled={busy}
-                  onClick={() => onSend(prompt)}
-                >
-                  {prompt}
-                </button>
+      <div className="workspace">
+        <header className="topbar">
+          <div className="topbar-side">
+            {hasHistory ? (
+              <button
+                type="button"
+                className="text-btn chats-toggle"
+                onClick={() => setSidebarOpen(true)}
+              >
+                Chats
+              </button>
+            ) : null}
+          </div>
+          <div className="brand">ChatJev</div>
+          <div className="topbar-side end">
+            {active ? (
+              <button
+                type="button"
+                className="text-btn"
+                onClick={onNewChat}
+                disabled={busy}
+              >
+                New chat
+              </button>
+            ) : null}
+          </div>
+        </header>
+
+        {notices.length > 0 ? (
+          <div className="banner-wrap">
+            <div className="setup-warning" role="alert">
+              {notices.map((notice) => (
+                <p key={notice}>{notice}</p>
               ))}
             </div>
           </div>
-        ) : (
-          <div className="stage-inner">
-            <ChatThread
-              messages={messages}
-              pending={busy && messages.at(-1)?.role === "user"}
-            />
-          </div>
-        )}
-      </div>
+        ) : null}
 
-      <div className="dock">
-        <div className="dock-inner">
-          {error ? <p className="dock-error">{error}</p> : null}
-          <MessageInput
-            disabled={busy}
-            placeholder={
-              document ? "Ask about this document" : "Message ChatJev"
-            }
-            attachment={
-              document ? (
-                <FileChip
-                  session={document}
-                  onClear={() => {
-                    request.current += 1;
-                    setBusy(false);
-                    setDocument(null);
-                    setMessages([]);
-                    setError(null);
-                    setAskNotice(null);
-                  }}
-                />
-              ) : null
-            }
-            onSend={onSend}
-            onFile={onFile}
-          />
-          <p className="fineprint">
-            Jev scores sources. It does not invent the answer.
-          </p>
+        <div className="stage" ref={stageRef}>
+          {empty ? (
+            <div className="hero">
+              <h1>What should Jev judge?</h1>
+              <p className="hero-lead">
+                Chat with Jev in plain language. It scores sources instead of
+                writing the answer, so it typically cannot invent facts.
+              </p>
+              <ol className="hero-steps">
+                <li>
+                  <h2>Ask like a normal chatbot</h2>
+                  <p>
+                    An LLM and a web scraper turn your question into something
+                    Jev can judge.
+                  </p>
+                </li>
+                <li>
+                  <h2>Give Jev the sources</h2>
+                  <p>
+                    If a file does not answer, ChatJev looks the question up and
+                    passes those sources along.
+                  </p>
+                </li>
+                <li>
+                  <h2>Read the scores back</h2>
+                  <p>ChatJev turns Jev’s result into a reply.</p>
+                </li>
+              </ol>
+              <div className="suggestions">
+                {SUGGESTIONS.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    className="suggestion"
+                    disabled={busy}
+                    onClick={() => onSend(prompt)}
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="stage-inner">
+              <ChatThread
+                messages={messages}
+                pending={pendingChatId === active?.id}
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="dock">
+          <div className="dock-inner">
+            {error ? <p className="dock-error">{error}</p> : null}
+            <MessageInput
+              disabled={busy}
+              placeholder={
+                document ? "Ask about this document" : "Message ChatJev"
+              }
+              attachment={
+                document ? (
+                  <FileChip session={document} onClear={onClearDocument} />
+                ) : null
+              }
+              onSend={onSend}
+              onFile={onFile}
+            />
+            <p className="fineprint">
+              Jev scores sources. It does not invent the answer.
+            </p>
+          </div>
         </div>
       </div>
 

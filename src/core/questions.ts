@@ -72,9 +72,7 @@ function uniqueKey(raw: unknown, used: Set<string>, fallback: string): string {
   return base;
 }
 
-function normalizeType(
-  draft: LooseDraft,
-): "noul" | "choice" | "score" | null {
+function normalizeType(draft: LooseDraft): "noul" | "choice" | "score" | null {
   const raw = String(draft.type ?? "")
     .toLowerCase()
     .replace(/[^a-z]+/g, "");
@@ -411,7 +409,9 @@ export function viewJudgment(
   answer: JevAnswer | undefined,
 ): JudgmentView {
   if (!answer || answer.type !== question.type) {
-    throw new Error(`Jev did not return a ${question.type} answer for "${key}".`);
+    throw new Error(
+      `Jev did not return a ${question.type} answer for "${key}".`,
+    );
   }
 
   if (answer.type === "noul") {

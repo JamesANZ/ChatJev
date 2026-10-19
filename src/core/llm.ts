@@ -1,9 +1,5 @@
 import { compileEvaluation } from "./compile";
-import {
-  claimProposition,
-  needsWebEvidence,
-  webClaimDrafts,
-} from "./evidence";
+import { claimProposition, needsWebEvidence, webClaimDrafts } from "./evidence";
 import {
   examDrafts,
   isTopicQuestion,
@@ -42,11 +38,11 @@ export function formulationGuidance(strategy: FormulationStrategy): string {
     case "match":
       return "Match the user's question. If it is a yes/no claim, including a vague topic question such as whether the document is about something, use one noul whose instructions restate that claim. Otherwise use one choice question whose labels are possible answers, including abstain when the evidence may not say.";
     case "proposition":
-      return "Ignore the previous shape. Write one noul. The instructions are a single proposition the evidence can support or contradict, at most 400 characters. For \"Is this about flights?\" the proposition is \"The document is about flights.\"";
+      return 'Ignore the previous shape. Write one noul. The instructions are a single proposition the evidence can support or contradict, at most 400 characters. For "Is this about flights?" the proposition is "The document is about flights."';
     case "exam":
       return "Ignore the previous shape. Write one choice question with key answer. Use 3 to 5 mutually exclusive labels of at most 80 characters, plus abstain for when the evidence does not contain enough information. Do not mark the correct label.";
     case "simple":
-      return "Use the smallest scorable question. One choice with keys a, b, and abstain. Labels are at most 80 characters: two concrete possibilities, plus \"The evidence does not contain enough information to answer.\"";
+      return 'Use the smallest scorable question. One choice with keys a, b, and abstain. Labels are at most 80 characters: two concrete possibilities, plus "The evidence does not contain enough information to answer."';
   }
 }
 
@@ -79,7 +75,8 @@ export function createHeuristicLlm(): LlmClient {
     },
     async compile(input) {
       const strategy = input.strategy ?? "match";
-      if (strategy === "exam" || strategy === "simple") return examDrafts(input);
+      if (strategy === "exam" || strategy === "simple")
+        return examDrafts(input);
       if (strategy === "proposition") {
         const instructions = isTopicQuestion(input.question)
           ? topicProposition(input.question)

@@ -112,7 +112,10 @@ function demoExamChoice(
         return {
           key,
           index,
-          score: !overview && questionTokens.length > 0 && !questionInEvidence ? 10 : 0.05,
+          score:
+            !overview && questionTokens.length > 0 && !questionInEvidence
+              ? 10
+              : 0.05,
         };
       }
       const tokens = contentTokens(text);
@@ -127,7 +130,9 @@ function demoExamChoice(
         score: overview ? coverage : questionHits * 2 + coverage,
       };
     })
-    .sort((left, right) => right.score - left.score || left.index - right.index);
+    .sort(
+      (left, right) => right.score - left.score || left.index - right.index,
+    );
 
   const probabilities: Record<string, number> = {};
   const leader = 0.74;
@@ -241,7 +246,10 @@ export function createDemoJevClient(): JevClient {
     const noul = overlap(question || "claim", haystack);
     const answers: Record<string, JevAnswer> = {};
     for (const [key, item] of Object.entries(request.questions)) {
-      answers[key] = demoAnswer(item, noul, { haystack, userQuestion: question });
+      answers[key] = demoAnswer(item, noul, {
+        haystack,
+        userQuestion: question,
+      });
     }
     return response(answers, { input_tokens: 180, output_tokens: 16 });
   });

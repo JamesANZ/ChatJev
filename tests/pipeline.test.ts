@@ -38,9 +38,9 @@ describe("validateQuestions", () => {
 describe("clipEvidence", () => {
   it("reserves room for sources when both are present", () => {
     const clipped = clipEvidence("d".repeat(100), "s".repeat(100), 50);
-    expect(clipped.document.length + clipped.sources.length).toBeLessThanOrEqual(
-      50,
-    );
+    expect(
+      clipped.document.length + clipped.sources.length,
+    ).toBeLessThanOrEqual(50);
     expect(clipped.truncated).toBe(true);
     expect(clipped.sources.length).toBeGreaterThan(0);
   });

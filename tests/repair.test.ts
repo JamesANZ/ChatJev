@@ -20,21 +20,24 @@ describe("repairDrafts", () => {
     const question = validated.questions.bad_key;
     expect(question?.type).toBe("noul");
     expect(question?.instructions.length).toBeLessThanOrEqual(400);
-    expect(question?.instructions.startsWith("The document is about flights.")).toBe(
-      true,
-    );
+    expect(
+      question?.instructions.startsWith("The document is about flights."),
+    ).toBe(true);
   });
 
   it("turns a single long choice label into a scorable exam", () => {
     const label = `The document is about scheduled passenger flights between cities. ${"extra ".repeat(20)}`;
-    const repaired = repairDrafts([
-      {
-        key: "Answer",
-        type: "multiple-choice",
-        instructions: "",
-        criteria: { flights: label },
-      },
-    ], { fallbackInstructions: "Is this about flights?" });
+    const repaired = repairDrafts(
+      [
+        {
+          key: "Answer",
+          type: "multiple-choice",
+          instructions: "",
+          criteria: { flights: label },
+        },
+      ],
+      { fallbackInstructions: "Is this about flights?" },
+    );
     const validated = validateQuestions(repaired);
     expect(validated.ok).toBe(true);
     if (!validated.ok) return;
@@ -52,7 +55,15 @@ describe("repairDrafts", () => {
         key: "strength",
         type: "rating",
         instructions: "How strongly does the document mention flights?",
-        criteria: ["None", "Weak", "Some", "Clear", "Strong", "Explicit", "Extra"],
+        criteria: [
+          "None",
+          "Weak",
+          "Some",
+          "Clear",
+          "Strong",
+          "Explicit",
+          "Extra",
+        ],
       },
       {
         key: "strength",
@@ -76,7 +87,10 @@ describe("repairDrafts", () => {
       {
         type: "boolean",
         instructions: "The document is about flights.",
-        criteria: { yes: "It is about flights.", no: "It is not about flights." },
+        criteria: {
+          yes: "It is about flights.",
+          no: "It is not about flights.",
+        },
       },
     ]);
     const validated = validateQuestions(repaired);

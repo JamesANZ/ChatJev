@@ -30,9 +30,7 @@ export function topicProposition(question: string): string {
     .replace(TOPIC_QUESTION, "")
     .replace(/[?.!]+$/g, "")
     .trim();
-  const sentence = topic
-    ? `The document is about ${topic}.`
-    : question.trim();
+  const sentence = topic ? `The document is about ${topic}.` : question.trim();
   return sentence.slice(0, 400);
 }
 
@@ -88,7 +86,11 @@ export function examDrafts(input: {
 
   const chosen: string[] = [];
   for (const sentence of ranked) {
-    if (chosen.some((existing) => existing.toLowerCase() === sentence.toLowerCase())) {
+    if (
+      chosen.some(
+        (existing) => existing.toLowerCase() === sentence.toLowerCase(),
+      )
+    ) {
       continue;
     }
     chosen.push(sentence);
@@ -111,7 +113,9 @@ export function examDrafts(input: {
   const labels = chosen.slice(0, 3);
   if (labels.length < 2) {
     labels.push(
-      clipLabel("The evidence states a specific claim that answers the question."),
+      clipLabel(
+        "The evidence states a specific claim that answers the question.",
+      ),
     );
   }
   if (labels.length < 2) {

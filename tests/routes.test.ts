@@ -51,12 +51,12 @@ describe("HTTP routes", () => {
       judgments: Array<{ key: string; noul?: number; choice?: string }>;
     };
     expect(body.kind).toBe("verdict");
-    expect(body.judgments.find((item) => item.key === "proposition")?.noul).toBe(
-      0.9,
-    );
     expect(
-      body.judgments.find((item) => item.key === "relation")?.choice,
-    ).toBe("supported");
+      body.judgments.find((item) => item.key === "proposition")?.noul,
+    ).toBe(0.9);
+    expect(body.judgments.find((item) => item.key === "relation")?.choice).toBe(
+      "supported",
+    );
     expect(body.message).toContain("90%");
     expect(body.message).toContain(MEDICAL_QUESTION);
   });

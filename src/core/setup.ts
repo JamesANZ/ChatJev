@@ -25,8 +25,7 @@ function gatewayReady(env: SetupEnv): boolean {
 export function readSetup(env: SetupEnv = process.env): {
   issues: SetupIssue[];
 } {
-  const mock =
-    env.CHATJEV_MOCK_JEV === "1" || env.CHATJEV_MOCK_LLM === "1";
+  const mock = env.CHATJEV_MOCK_JEV === "1" || env.CHATJEV_MOCK_LLM === "1";
   if (mock) {
     return {
       issues: [

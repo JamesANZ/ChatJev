@@ -51,7 +51,10 @@ export function extractSnippets(steps: ToolStep[]): SourceSnippet[] {
         if (seen.has(row.url)) continue;
         seen.add(row.url);
         found.push({
-          title: typeof row.title === "string" && row.title.trim() ? row.title.trim() : row.url,
+          title:
+            typeof row.title === "string" && row.title.trim()
+              ? row.title.trim()
+              : row.url,
           url: row.url,
           excerpt: excerpt.trim(),
         });

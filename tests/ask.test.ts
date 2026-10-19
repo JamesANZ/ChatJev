@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { askDocument } from "../src/core/ask";
 import { ingestDocument } from "../src/core/ingest";
 import { FORMULATION_ATTEMPTS, type LlmClient } from "../src/core/llm";
-import { createDemoJevClient, FakeJevClient, noulAnswer } from "../src/core/jev-client";
+import {
+  createDemoJevClient,
+  FakeJevClient,
+  noulAnswer,
+} from "../src/core/jev-client";
 import {
   ChatJevError,
   type JevAnswer,
@@ -76,9 +80,9 @@ describe("askDocument", () => {
     expect(result.narration).toContain("90%");
     expect(result.sources).toEqual([SOURCE]);
     expect(client.calls).toHaveLength(1);
-    expect(String((client.calls[0]?.state as { sources?: string }).sources)).toContain(
-      "https://example.com/heart",
-    );
+    expect(
+      String((client.calls[0]?.state as { sources?: string }).sources),
+    ).toContain("https://example.com/heart");
   });
 
   it("drops a narration that invents a percentage", async () => {
@@ -92,16 +96,21 @@ describe("askDocument", () => {
       usage: { input_tokens: 10, output_tokens: 2 },
       answers: { claim: noulAnswer(0.9) },
     }));
-    const result = await askDocument(client, document, MEDICAL_QUESTION, llm({
-      drafts: [
-        {
-          key: "claim",
-          type: "noul",
-          instructions: "The document links nicotine and heart disease.",
-        },
-      ],
-      narration: "This is only 12% settled.",
-    }));
+    const result = await askDocument(
+      client,
+      document,
+      MEDICAL_QUESTION,
+      llm({
+        drafts: [
+          {
+            key: "claim",
+            type: "noul",
+            instructions: "The document links nicotine and heart disease.",
+          },
+        ],
+        narration: "This is only 12% settled.",
+      }),
+    );
 
     expect(result.kind).toBe("verdict");
     if (result.kind !== "verdict") return;
@@ -124,33 +133,38 @@ describe("askDocument", () => {
       ),
     }));
     let compiles = 0;
-    const result = await askDocument(client, document, "Is this about flights?", {
-      async gather() {
-        return [];
+    const result = await askDocument(
+      client,
+      document,
+      "Is this about flights?",
+      {
+        async gather() {
+          return [];
+        },
+        async compile() {
+          compiles += 1;
+          return [
+            {
+              key: "Bad Key",
+              type: "noul",
+              instructions: "The document is about flights. ".repeat(40),
+            },
+          ];
+        },
+        async narrate(input) {
+          return input.lines.join(" ");
+        },
       },
-      async compile() {
-        compiles += 1;
-        return [
-          {
-            key: "Bad Key",
-            type: "noul",
-            instructions: "The document is about flights. ".repeat(40),
-          },
-        ];
-      },
-      async narrate(input) {
-        return input.lines.join(" ");
-      },
-    });
+    );
 
     expect(compiles).toBe(1);
     expect(client.calls).toHaveLength(1);
     const repaired = client.calls[0]?.questions.bad_key;
     expect(repaired?.type).toBe("noul");
     expect(repaired?.instructions.length).toBeLessThanOrEqual(400);
-    expect(repaired?.instructions.startsWith("The document is about flights.")).toBe(
-      true,
-    );
+    expect(
+      repaired?.instructions.startsWith("The document is about flights."),
+    ).toBe(true);
     expect(result.kind).toBe("verdict");
     if (result.kind !== "verdict") return;
     expect(result.message).toContain("80%");
@@ -173,35 +187,40 @@ describe("askDocument", () => {
         answers,
       };
     });
-    const result = await askDocument(client, document, "Is this about flights?", {
-      async gather() {
-        return [];
-      },
-      async compile(input) {
-        seen.push(input.strategy ?? "");
-        if ((input.attempt ?? 0) === 0) {
+    const result = await askDocument(
+      client,
+      document,
+      "Is this about flights?",
+      {
+        async gather() {
+          return [];
+        },
+        async compile(input) {
+          seen.push(input.strategy ?? "");
+          if ((input.attempt ?? 0) === 0) {
+            return [
+              {
+                key: "topic",
+                type: "noul",
+                instructions: "The document is about flights.",
+              },
+            ];
+          }
+          expect(input.feedback).toMatch(/did not return/i);
+          expect(input.strategy).toBe("proposition");
           return [
             {
-              key: "topic",
+              key: "claim",
               type: "noul",
               instructions: "The document is about flights.",
             },
           ];
-        }
-        expect(input.feedback).toMatch(/did not return/i);
-        expect(input.strategy).toBe("proposition");
-        return [
-          {
-            key: "claim",
-            type: "noul",
-            instructions: "The document is about flights.",
-          },
-        ];
+        },
+        async narrate() {
+          return "";
+        },
       },
-      async narrate() {
-        return "";
-      },
-    });
+    );
 
     expect(seen).toEqual(["match", "proposition"]);
     expect(client.calls).toHaveLength(2);
@@ -305,7 +324,11 @@ describe("askDocument", () => {
           },
           async compile() {
             compiles += 1;
-            throw new ChatJevError(503, "llm_error", "The model is unavailable.");
+            throw new ChatJevError(
+              503,
+              "llm_error",
+              "The model is unavailable.",
+            );
           },
           async narrate() {
             return "";
