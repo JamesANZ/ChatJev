@@ -225,6 +225,30 @@ textarea {
   color: var(--ink-soft);
 }
 
+.judgments {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.judgments li {
+  line-height: 1.45;
+}
+
+.sources {
+  margin-top: 14px;
+}
+
+.sources p {
+  margin: 0 0 6px;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.sources a {
+  color: var(--yes);
+}
+
 .composer {
   display: flex;
   gap: 10px;

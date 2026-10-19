@@ -1,5 +1,6 @@
 import { askDocument } from "@/core/ask";
 import { ingestDocument } from "@/core/ingest";
+import { createHeuristicLlm, type LlmClient } from "@/core/llm";
 import {
   ChatJevError,
   type DocumentContext,
@@ -45,11 +46,12 @@ export async function handleUpload(request: Request): Promise<Response> {
 export async function handleAsk(
   request: Request,
   jev: JevClient,
+  llm: LlmClient = createHeuristicLlm(),
 ): Promise<Response> {
   try {
     const payload = (await request.json().catch(() => ({}))) as {
       question?: unknown;
-      document?: Partial<DocumentContext>;
+      document?: Partial<DocumentContext> | null;
     };
 
     if (typeof payload.question !== "string") {
@@ -64,31 +66,31 @@ export async function handleAsk(
 
     const text = payload.document?.text;
     const filename = payload.document?.filename;
-    if (
-      typeof text !== "string" ||
-      typeof filename !== "string" ||
-      !text ||
-      !filename
-    ) {
+    const hasText = typeof text === "string" && text.length > 0;
+    const hasName = typeof filename === "string" && filename.length > 0;
+    if ((hasText && !hasName) || (!hasText && hasName)) {
       return json(
         {
-          error: "Attach a document first, then ask a question.",
-          code: "missing_document",
+          error: "Send both the document text and filename.",
+          code: "invalid_document",
         },
         400,
       );
     }
 
-    const document: DocumentContext = {
-      id: payload.document?.id ?? "client",
-      filename,
-      mimeType: payload.document?.mimeType ?? "text/plain",
-      text,
-      charCount: text.length,
-      truncated: Boolean(payload.document?.truncated),
-    };
+    const document: DocumentContext | null =
+      hasText && hasName
+        ? {
+            id: payload.document?.id ?? "client",
+            filename,
+            mimeType: payload.document?.mimeType ?? "text/plain",
+            text,
+            charCount: text.length,
+            truncated: Boolean(payload.document?.truncated),
+          }
+        : null;
 
-    return json(await askDocument(jev, document, payload.question));
+    return json(await askDocument(jev, document, payload.question, llm));
   } catch (error) {
     return errorResponse(error);
   }

@@ -23,7 +23,7 @@ export async function askAttachedDocument(
   document: Pick<
     DocumentContext,
     "id" | "filename" | "mimeType" | "text" | "truncated"
-  >,
+  > | null,
   question: string,
 ): Promise<AskResult> {
   const response = await fetch("/api/ask", {

@@ -1,4 +1,10 @@
-import type { JevAnswer, JevClient, JevRequest, JevResponse } from "./types";
+import type {
+  JevAnswer,
+  JevClient,
+  JevQuestion,
+  JevRequest,
+  JevResponse,
+} from "./types";
 
 function response(
   answers: Record<string, JevAnswer>,
@@ -68,18 +74,64 @@ export function requireChoice<T extends string>(
   };
 }
 
+function overlap(instructions: string, haystack: string): number {
+  const tokens = instructions
+    .toLowerCase()
+    .split(/\W+/)
+    .filter((word) => word.length > 4);
+  if (!haystack.trim() || tokens.length === 0) return 0.5;
+  const hits = tokens.filter((word) => haystack.includes(word)).length;
+  return Math.min(0.95, 0.15 + (0.8 * hits) / tokens.length);
+}
+
+function demoAnswer(question: JevQuestion, noul: number): JevAnswer {
+  if (question.type === "noul") return noulAnswer(noul);
+  if (question.type === "choice") {
+    const keys = Object.keys(question.criteria);
+    const choice =
+      noul >= 0.6
+        ? keys[0]
+        : noul <= 0.4
+          ? (keys[1] ?? keys[0])
+          : (keys.at(-1) ?? keys[0]);
+    const rest = (1 - noul) / Math.max(1, keys.length - 1);
+    return choiceAnswer(
+      choice,
+      Object.fromEntries(keys.map((key) => [key, key === choice ? noul : rest])),
+      0.8,
+    );
+  }
+  const labels = question.criteria;
+  const max = labels.length - 1;
+  const score =
+    noul >= 0.75 ? max : noul >= 0.6 ? Math.max(1, max - 1) : noul >= 0.4 ? 1 : 0;
+  return scoreAnswer(
+    score,
+    Object.fromEntries(labels.map((label, index) => [String(index), label])),
+    Object.fromEntries(
+      labels.map((_, index) => [String(index), index === score ? 0.7 : 0.1]),
+    ),
+    0.75,
+  );
+}
+
 export function createDemoJevClient(): JevClient {
   return new FakeJevClient((request) => {
     const state = (request.state ?? {}) as {
       user_question?: string;
       document?: string;
+      sources?: string;
     };
     const question = state.user_question ?? "";
     const openEnded = /\b(summarize|explain|rewrite|what does it say)\b/i.test(
       question,
     );
 
-    if (!state.document) {
+    if (
+      request.questions.is_judgment &&
+      request.questions.kind &&
+      state.document === undefined
+    ) {
       return response(
         openEnded
           ? {
@@ -102,47 +154,13 @@ export function createDemoJevClient(): JevClient {
       );
     }
 
-    const tokens = question
-      .toLowerCase()
-      .split(/\W+/)
-      .filter((word) => word.length > 4);
-    const haystack = (state.document ?? "").toLowerCase();
-    const hits = tokens.filter((word) => haystack.includes(word)).length;
-    const noul =
-      tokens.length === 0
-        ? 0.5
-        : Math.min(0.95, 0.15 + (0.8 * hits) / tokens.length);
-    const relation =
-      noul >= 0.6
-        ? "supported"
-        : noul <= 0.4
-          ? "contradicted"
-          : "not_mentioned";
-    const strength = noul >= 0.75 ? 3 : noul >= 0.6 ? 2 : noul >= 0.4 ? 1 : 0;
-
-    return {
-      model: "jev-demo",
-      usage: { input_tokens: 180, output_tokens: 16 },
-      answers: {
-        proposition: noulAnswer(noul),
-        relation: choiceAnswer(
-          relation,
-          { supported: noul, contradicted: 1 - noul, not_mentioned: 0.1 },
-          0.8,
-        ),
-        strength: scoreAnswer(
-          strength,
-          {
-            "0": "None or off-topic",
-            "1": "Indirect or weak",
-            "2": "Moderate, with gaps",
-            "3": "Strong and explicit",
-          },
-          { "0": 0.05, "1": 0.1, "2": 0.2, "3": 0.65 },
-          0.75,
-        ),
-      },
-    };
+    const haystack = `${state.document ?? ""} ${state.sources ?? ""}`.toLowerCase();
+    const noul = overlap(question || "claim", haystack);
+    const answers: Record<string, JevAnswer> = {};
+    for (const [key, item] of Object.entries(request.questions)) {
+      answers[key] = demoAnswer(item, noul);
+    }
+    return response(answers, { input_tokens: 180, output_tokens: 16 });
   });
 }
 

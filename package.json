@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
-  "description": "Attach a document and ask Jev closed questions about it.",
+  "description": "Ask Jev to judge a document or web evidence, then read the verdict in plain language.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -12,10 +12,12 @@
     "test:watch": "vitest"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^4.0.96",
     "@typesafe-ai/sdk": "^0.6.0",
+    "ai": "^7.0.143",
     "mammoth": "^1.9.1",
     "next": "^15.5.4",
     "pdf-parse": "^1.1.1",

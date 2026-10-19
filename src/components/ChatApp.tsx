@@ -34,11 +34,6 @@ export function ChatApp() {
   }
 
   async function onSend(question: string) {
-    if (!document) {
-      setError("Attach a document before asking Jev.");
-      return;
-    }
-
     setError(null);
     setMessages((current) => [
       ...current,
@@ -67,9 +62,8 @@ export function ChatApp() {
       <header className="masthead">
         <h1>ChatJev</h1>
         <p>
-          Attach a document, then ask closed questions. Jev returns
-          probabilities, not essays — ChatJev turns those into a readable
-          verdict.
+          Ask in plain language. ChatJev turns the question into judgments,
+          Jev scores them, and you get a short reading of those scores.
         </p>
       </header>
 
@@ -91,7 +85,7 @@ export function ChatApp() {
         pending={busy && messages.at(-1)?.role === "user"}
       />
       {error ? <p className="error">{error}</p> : null}
-      <MessageInput disabled={!document || busy} onSend={onSend} />
+      <MessageInput disabled={busy} onSend={onSend} />
     </main>
   );
 }

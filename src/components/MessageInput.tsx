@@ -4,10 +4,15 @@ import { useState, type FormEvent, type KeyboardEvent } from "react";
 
 type MessageInputProps = {
   disabled?: boolean;
+  placeholder?: string;
   onSend: (question: string) => void;
 };
 
-export function MessageInput({ disabled, onSend }: MessageInputProps) {
+export function MessageInput({
+  disabled,
+  placeholder = "Ask a question for Jev to judge",
+  onSend,
+}: MessageInputProps) {
   const [value, setValue] = useState("");
 
   function submit() {
@@ -36,7 +41,7 @@ export function MessageInput({ disabled, onSend }: MessageInputProps) {
         disabled={disabled}
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={onKeyDown}
-        placeholder="Ask whether the document supports a specific claim"
+        placeholder={placeholder}
         rows={2}
       />
       <button type="submit" disabled={disabled || !value.trim()}>

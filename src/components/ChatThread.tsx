@@ -16,8 +16,8 @@ export function ChatThread({ messages, pending }: ChatThreadProps) {
   if (messages.length === 0 && !pending) {
     return (
       <p className="empty">
-        Ask a closed question, for example: does this document strongly suggest
-        a correlation between nicotine and heart disease?
+        Ask in your own words. Attach a file, or ask something ChatJev can look
+        up.
       </p>
     );
   }
@@ -34,7 +34,7 @@ export function ChatThread({ messages, pending }: ChatThreadProps) {
         ),
       )}
       {pending ? (
-        <section className="notice">Jev is judging the document…</section>
+        <section className="notice">Jev is judging…</section>
       ) : null}
     </div>
   );

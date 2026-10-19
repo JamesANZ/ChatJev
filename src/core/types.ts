@@ -116,12 +116,42 @@ export type Verdict = {
   details: string[];
 };
 
+export type SourceSnippet = {
+  title: string;
+  url: string;
+  excerpt: string;
+};
+
+export type QuestionDraft = {
+  key: string;
+  type: "noul" | "choice" | "score";
+  instructions: string;
+  criteria?: unknown;
+};
+
+export type JudgmentView = {
+  key: string;
+  instructions: string;
+  type: JevQuestion["type"];
+  line: string;
+  leaning?: Leaning;
+  noul?: number;
+  choice?: string;
+  confidence?: number;
+  score?: number;
+  scoreMax?: number;
+  label?: string;
+};
+
 export type AskResult =
   | {
       kind: "verdict";
       question: string;
       message: string;
-      verdict: Verdict;
+      narration: string | null;
+      judgments: JudgmentView[];
+      sources: SourceSnippet[];
+      evidenceTruncated: boolean;
       model: string;
       usage: JevUsage;
       answers: Record<string, JevAnswer>;

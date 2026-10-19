@@ -48,11 +48,15 @@ describe("HTTP routes", () => {
     const body = (await asked.json()) as {
       kind: string;
       message: string;
-      verdict: { noul: number; relation: string };
+      judgments: Array<{ key: string; noul?: number; choice?: string }>;
     };
     expect(body.kind).toBe("verdict");
-    expect(body.verdict.noul).toBe(0.9);
-    expect(body.verdict.relation).toBe("supported");
+    expect(body.judgments.find((item) => item.key === "proposition")?.noul).toBe(
+      0.9,
+    );
+    expect(
+      body.judgments.find((item) => item.key === "relation")?.choice,
+    ).toBe("supported");
     expect(body.message).toContain("90%");
     expect(body.message).toContain(MEDICAL_QUESTION);
   });

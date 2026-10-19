@@ -1,10 +1,14 @@
 "use client";
 
-import type { AskResult } from "@/core/types";
+import type { AskResult, JudgmentView } from "@/core/types";
 
 type VerdictCardProps = {
   result: AskResult;
 };
+
+function primaryNoul(judgments: JudgmentView[]): JudgmentView | undefined {
+  return judgments.find((item) => item.type === "noul" && item.noul != null);
+}
 
 export function VerdictCard({ result }: VerdictCardProps) {
   if (result.kind === "refusal") {
@@ -15,33 +19,44 @@ export function VerdictCard({ result }: VerdictCardProps) {
     );
   }
 
-  const { verdict, model, usage } = result;
-  const width = `${Math.round(verdict.noul * 100)}%`;
+  const primary = primaryNoul(result.judgments);
+  const leaning = primary?.leaning ?? "unsure";
+  const width = `${Math.round((primary?.noul ?? 0) * 100)}%`;
 
   return (
-    <section className={`verdict ${verdict.leaning}`}>
-      <h2>{verdict.headline}</h2>
-      <div className="meter" aria-hidden="true">
-        <span style={{ width }} />
-      </div>
-      <div className="pills">
-        <span className={`pill ${verdict.leaning}`}>
-          {verdict.leaning === "unsure"
-            ? `Unsure · ${Math.round(verdict.noul * 100)}% yes`
-            : `${verdict.leaning} · ${Math.round(verdict.noul * 100)}% yes`}
-        </span>
-        <span className="pill unsure">
-          {verdict.relation.replace("_", " ")}
-        </span>
-        <span className="pill yes">{verdict.strengthLabel}</span>
-      </div>
-      <ul>
-        {verdict.details.map((line) => (
-          <li key={line}>{line}</li>
+    <section className={`verdict ${leaning}`}>
+      {result.narration ? <h2>{result.narration}</h2> : null}
+      {primary ? (
+        <div className="meter" aria-hidden="true">
+          <span style={{ width }} />
+        </div>
+      ) : null}
+      <ul className="judgments">
+        {result.judgments.map((item) => (
+          <li key={item.key}>{item.line}</li>
         ))}
       </ul>
+      {result.sources.length > 0 ? (
+        <div className="sources">
+          <p>Sources Jev saw</p>
+          <ul>
+            {result.sources.map((source) => (
+              <li key={source.url}>
+                <a href={source.url} target="_blank" rel="noreferrer">
+                  {source.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {result.evidenceTruncated ? (
+        <p className="warning">
+          Evidence was cut to fit Jev’s 32k-token budget.
+        </p>
+      ) : null}
       <p className="meta">
-        {model} · {usage.input_tokens} input tokens
+        {result.model} · {result.usage.input_tokens} input tokens
       </p>
     </section>
   );
