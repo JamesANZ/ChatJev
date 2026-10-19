@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { askDocument } from "../src/core/ask";
 import { ingestDocument } from "../src/core/ingest";
-import type { LlmClient } from "../src/core/llm";
+import { FORMULATION_ATTEMPTS, type LlmClient } from "../src/core/llm";
 import { createDemoJevClient, FakeJevClient, noulAnswer } from "../src/core/jev-client";
-import type { QuestionDraft, SourceSnippet } from "../src/core/types";
+import {
+  ChatJevError,
+  type JevAnswer,
+  type QuestionDraft,
+  type SourceSnippet,
+} from "../src/core/types";
 import { fixture, MEDICAL_QUESTION } from "./helpers";
 
 const SOURCE: SourceSnippet = {
@@ -105,47 +110,242 @@ describe("askDocument", () => {
     expect(result.message).not.toContain("12%");
   });
 
-  it("retries once when the first question list is invalid", async () => {
+  it("repairs a sloppy question list and scores it once", async () => {
     const document = await ingestDocument({
       buffer: fixture("nicotine-heart.txt"),
       filename: "nicotine-heart.txt",
       mimeType: "text/plain",
     });
+    const client = new FakeJevClient((request) => ({
+      model: "jev-test",
+      usage: { input_tokens: 8, output_tokens: 2 },
+      answers: Object.fromEntries(
+        Object.keys(request.questions).map((key) => [key, noulAnswer(0.8)]),
+      ),
+    }));
+    let compiles = 0;
+    const result = await askDocument(client, document, "Is this about flights?", {
+      async gather() {
+        return [];
+      },
+      async compile() {
+        compiles += 1;
+        return [
+          {
+            key: "Bad Key",
+            type: "noul",
+            instructions: "The document is about flights. ".repeat(40),
+          },
+        ];
+      },
+      async narrate(input) {
+        return input.lines.join(" ");
+      },
+    });
+
+    expect(compiles).toBe(1);
+    expect(client.calls).toHaveLength(1);
+    const repaired = client.calls[0]?.questions.bad_key;
+    expect(repaired?.type).toBe("noul");
+    expect(repaired?.instructions.length).toBeLessThanOrEqual(400);
+    expect(repaired?.instructions.startsWith("The document is about flights.")).toBe(
+      true,
+    );
+    expect(result.kind).toBe("verdict");
+    if (result.kind !== "verdict") return;
+    expect(result.message).toContain("80%");
+  });
+
+  it("tries another formulation when Jev cannot score the first one", async () => {
+    const document = await ingestDocument({
+      buffer: fixture("nicotine-heart.txt"),
+      filename: "nicotine-heart.txt",
+      mimeType: "text/plain",
+    });
+    const seen: string[] = [];
+    const client = new FakeJevClient((request) => {
+      const answers: Record<string, JevAnswer> = request.questions.claim
+        ? { claim: noulAnswer(0.66) }
+        : {};
+      return {
+        model: "jev-test",
+        usage: { input_tokens: 10, output_tokens: 2 },
+        answers,
+      };
+    });
+    const result = await askDocument(client, document, "Is this about flights?", {
+      async gather() {
+        return [];
+      },
+      async compile(input) {
+        seen.push(input.strategy ?? "");
+        if ((input.attempt ?? 0) === 0) {
+          return [
+            {
+              key: "topic",
+              type: "noul",
+              instructions: "The document is about flights.",
+            },
+          ];
+        }
+        expect(input.feedback).toMatch(/did not return/i);
+        expect(input.strategy).toBe("proposition");
+        return [
+          {
+            key: "claim",
+            type: "noul",
+            instructions: "The document is about flights.",
+          },
+        ];
+      },
+      async narrate() {
+        return "";
+      },
+    });
+
+    expect(seen).toEqual(["match", "proposition"]);
+    expect(client.calls).toHaveLength(2);
+    expect(result.kind).toBe("verdict");
+    if (result.kind !== "verdict") return;
+    expect(result.message).toContain("66%");
+    expect(result.message.toLowerCase()).toContain("flights");
+  });
+
+  it("retries when the model returns unreadable output", async () => {
+    const document = await ingestDocument({
+      buffer: fixture("nicotine-heart.txt"),
+      filename: "nicotine-heart.txt",
+      mimeType: "text/plain",
+    });
+    let compiles = 0;
     const client = new FakeJevClient(() => ({
       model: "jev-test",
-      usage: { input_tokens: 10, output_tokens: 2 },
+      usage: { input_tokens: 4, output_tokens: 1 },
       answers: { claim: noulAnswer(0.7) },
     }));
-    const result = await askDocument(client, document, MEDICAL_QUESTION, llm({
-      drafts: [
-        [{ key: "Bad Key", type: "noul", instructions: "A claim." }],
-        [
+    const result = await askDocument(client, document, MEDICAL_QUESTION, {
+      async gather() {
+        return [];
+      },
+      async compile() {
+        compiles += 1;
+        if (compiles === 1) {
+          throw new ChatJevError(
+            502,
+            "llm_error",
+            "The model did not return a JSON object.",
+          );
+        }
+        return [
           {
             key: "claim",
             type: "noul",
             instructions: "The document links nicotine and heart disease.",
           },
-        ],
-      ],
-      narration: "Jev leans yes at 70%.",
-    }));
+        ];
+      },
+      async narrate() {
+        return "";
+      },
+    });
 
-    expect(result.kind).toBe("verdict");
+    expect(compiles).toBe(2);
     expect(client.calls).toHaveLength(1);
+    expect(result.kind).toBe("verdict");
   });
 
-  it("turns an empty compiler result into a scored exam sentence", async () => {
+  it("stops when Jev or the model cannot be called", async () => {
     const document = await ingestDocument({
       buffer: fixture("nicotine-heart.txt"),
       filename: "nicotine-heart.txt",
       mimeType: "text/plain",
     });
+    let compiles = 0;
+    const missing = new FakeJevClient(() => {
+      throw new ChatJevError(
+        503,
+        "missing_api_key",
+        "TYPESAFE_API_KEY is not set.",
+      );
+    });
+    await expect(
+      askDocument(missing, document, "Is this about flights?", {
+        async gather() {
+          return [];
+        },
+        async compile() {
+          compiles += 1;
+          return [
+            {
+              key: "claim",
+              type: "noul",
+              instructions: "The document is about flights.",
+            },
+          ];
+        },
+        async narrate() {
+          return "";
+        },
+      }),
+    ).rejects.toMatchObject({ code: "missing_api_key" });
+    expect(compiles).toBe(1);
+    expect(missing.calls).toHaveLength(1);
+
+    compiles = 0;
+    await expect(
+      askDocument(
+        new FakeJevClient(() => {
+          throw new Error("unused");
+        }),
+        document,
+        MEDICAL_QUESTION,
+        {
+          async gather() {
+            return [];
+          },
+          async compile() {
+            compiles += 1;
+            throw new ChatJevError(503, "llm_error", "The model is unavailable.");
+          },
+          async narrate() {
+            return "";
+          },
+        },
+      ),
+    ).rejects.toMatchObject({ code: "llm_error" });
+    expect(compiles).toBe(1);
+  });
+
+  it("falls back to an exam after every formulation comes back empty", async () => {
+    const document = await ingestDocument({
+      buffer: fixture("nicotine-heart.txt"),
+      filename: "nicotine-heart.txt",
+      mimeType: "text/plain",
+    });
+    let compiles = 0;
+    const model: LlmClient = {
+      async gather() {
+        return [];
+      },
+      async compile(input) {
+        compiles += 1;
+        expect(input.attempt).toBe(compiles - 1);
+        if (compiles > 1) {
+          expect(input.feedback).toMatch(/empty list/i);
+        }
+        return [];
+      },
+      async narrate() {
+        return "";
+      },
+    };
     const result = await askDocument(
       createDemoJevClient(),
       document,
       "summarize this",
-      llm({ drafts: [] }),
+      model,
     );
+    expect(compiles).toBe(FORMULATION_ATTEMPTS);
     expect(result.kind).toBe("verdict");
     if (result.kind !== "verdict") return;
     expect(result.judgments[0]?.type).toBe("choice");

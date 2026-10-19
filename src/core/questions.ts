@@ -1,3 +1,4 @@
+import { ABSTAIN_TEXT } from "./exam";
 import { truncateToBudget } from "./ingest";
 import {
   MAX_STATE_CHARS,
@@ -19,8 +20,235 @@ export type QuestionValidation =
   | { ok: true; questions: Record<string, JevQuestion> }
   | { ok: false; error: string };
 
+type LooseDraft = {
+  key?: unknown;
+  type?: unknown;
+  instructions?: unknown;
+  criteria?: unknown;
+};
+
+const CHOICE_KEYS = ["a", "b", "c", "d", "e", "f"] as const;
+
 function percent(value: number): string {
   return `${Math.round(value * 100)}%`;
+}
+
+function clipText(value: unknown, max: number): string {
+  if (typeof value !== "string") return "";
+  const cleaned = value.replace(/\s+/g, " ").trim();
+  if (cleaned.length <= max) return cleaned;
+  const sliced = cleaned.slice(0, max - 1);
+  const boundary = sliced.lastIndexOf(" ");
+  const base = (
+    boundary >= Math.floor(max * 0.6) ? sliced.slice(0, boundary) : sliced
+  ).trim();
+  return `${base}…`.slice(0, max);
+}
+
+function slugKey(value: string): string {
+  const slug = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/^[^a-z]+/, "")
+    .slice(0, 41);
+  return KEY_PATTERN.test(slug) ? slug : "";
+}
+
+function uniqueKey(raw: unknown, used: Set<string>, fallback: string): string {
+  const base = slugKey(typeof raw === "string" ? raw : "") || fallback;
+  if (!used.has(base)) {
+    used.add(base);
+    return base;
+  }
+  for (let index = 2; index < 30; index += 1) {
+    const suffix = `_${index}`;
+    const candidate = `${base.slice(0, 41 - suffix.length)}${suffix}`;
+    if (KEY_PATTERN.test(candidate) && !used.has(candidate)) {
+      used.add(candidate);
+      return candidate;
+    }
+  }
+  return base;
+}
+
+function normalizeType(
+  draft: LooseDraft,
+): "noul" | "choice" | "score" | null {
+  const raw = String(draft.type ?? "")
+    .toLowerCase()
+    .replace(/[^a-z]+/g, "");
+  if (["noul", "boolean", "yesno", "proposition", "claim"].includes(raw)) {
+    return "noul";
+  }
+  if (["choice", "select", "exam", "multiplechoice"].includes(raw)) {
+    return "choice";
+  }
+  if (["score", "rating", "scale"].includes(raw)) return "score";
+  if (Array.isArray(draft.criteria) && typeof draft.criteria[0] === "string") {
+    return "score";
+  }
+  if (draft.criteria && typeof draft.criteria === "object") return "choice";
+  if (typeof draft.instructions === "string" && draft.instructions.trim()) {
+    return "noul";
+  }
+  return null;
+}
+
+function choiceEntries(criteria: unknown): Array<[string, string]> {
+  if (Array.isArray(criteria)) {
+    return criteria.map((item, index) => {
+      if (typeof item === "string") return [`option_${index + 1}`, item];
+      if (item && typeof item === "object") {
+        const record = item as Record<string, unknown>;
+        const key = typeof record.key === "string" ? record.key : "";
+        const label =
+          typeof record.label === "string"
+            ? record.label
+            : typeof record.text === "string"
+              ? record.text
+              : "";
+        return [key || `option_${index + 1}`, label];
+      }
+      return ["", ""];
+    });
+  }
+  if (criteria && typeof criteria === "object") {
+    return Object.entries(criteria).map(([key, value]) => [
+      key,
+      typeof value === "string" ? value : "",
+    ]);
+  }
+  return [];
+}
+
+function repairChoice(
+  draft: LooseDraft,
+  instructions: string,
+  used: Set<string>,
+): QuestionDraft | null {
+  const built: Array<[string, string]> = [];
+  const local = new Set<string>();
+  for (const [rawKey, rawLabel] of choiceEntries(draft.criteria)) {
+    const label = clipText(rawLabel, MAX_LABEL);
+    if (!label) continue;
+    let option = slugKey(rawKey);
+    if (!option || local.has(option)) {
+      option = CHOICE_KEYS.find((key) => !local.has(key)) ?? "";
+    }
+    if (!option || local.has(option)) continue;
+    local.add(option);
+    built.push([option, label]);
+  }
+
+  let selected = built;
+  if (selected.length > 6) {
+    const abstain = selected.find(([key]) => key === "abstain");
+    const rest = selected
+      .filter(([key]) => key !== "abstain")
+      .slice(0, abstain ? 5 : 6);
+    selected = abstain ? [...rest, abstain] : rest;
+  }
+  if (selected.length === 1 && selected[0]?.[0] !== "abstain") {
+    selected = [...selected, ["abstain", ABSTAIN_TEXT]];
+  }
+  if (selected.length < 2) return null;
+
+  return {
+    key: uniqueKey(draft.key, used, "answer"),
+    type: "choice",
+    instructions,
+    criteria: Object.fromEntries(selected),
+  };
+}
+
+function scoreLabels(criteria: unknown): string[] {
+  if (Array.isArray(criteria)) {
+    return criteria.map((item) => (typeof item === "string" ? item : ""));
+  }
+  if (criteria && typeof criteria === "object") {
+    return Object.values(criteria).map((item) =>
+      typeof item === "string" ? item : "",
+    );
+  }
+  return [];
+}
+
+function repairScore(
+  draft: LooseDraft,
+  instructions: string,
+  used: Set<string>,
+): QuestionDraft | null {
+  const criteria = scoreLabels(draft.criteria)
+    .map((label) => clipText(label, MAX_LABEL))
+    .filter(Boolean)
+    .slice(0, 6);
+  if (criteria.length < 2) return null;
+  return {
+    key: uniqueKey(draft.key, used, "rating"),
+    type: "score",
+    instructions,
+    criteria,
+  };
+}
+
+function noulCriteria(
+  criteria: unknown,
+): { true: string; false: string } | undefined {
+  if (!criteria || typeof criteria !== "object" || Array.isArray(criteria)) {
+    return undefined;
+  }
+  const record = criteria as Record<string, unknown>;
+  const yes = clipText(record.true ?? record.True ?? record.yes, MAX_LABEL);
+  const no = clipText(record.false ?? record.False ?? record.no, MAX_LABEL);
+  if (!yes || !no) return undefined;
+  return { true: yes, false: no };
+}
+
+function repairOne(
+  draft: LooseDraft,
+  fallbackInstructions: string,
+  used: Set<string>,
+): QuestionDraft | null {
+  const type = normalizeType(draft);
+  if (!type) return null;
+  const instructions = clipText(
+    typeof draft.instructions === "string" && draft.instructions.trim()
+      ? draft.instructions
+      : fallbackInstructions,
+    MAX_INSTRUCTION,
+  );
+  if (!instructions) return null;
+  if (type === "choice") return repairChoice(draft, instructions, used);
+  if (type === "score") return repairScore(draft, instructions, used);
+
+  const criteria = noulCriteria(draft.criteria);
+  const question: QuestionDraft = {
+    key: uniqueKey(draft.key, used, "claim"),
+    type: "noul",
+    instructions,
+  };
+  if (criteria) question.criteria = criteria;
+  return question;
+}
+
+export function repairDrafts(
+  drafts: readonly LooseDraft[],
+  options?: { fallbackInstructions?: string },
+): QuestionDraft[] {
+  const fallback = clipText(
+    options?.fallbackInstructions ?? "Judge the attached evidence.",
+    MAX_INSTRUCTION,
+  );
+  const used = new Set<string>();
+  const repaired: QuestionDraft[] = [];
+  for (const draft of drafts.slice(0, 20)) {
+    if (repaired.length >= MAX_QUESTIONS) break;
+    if (!draft || typeof draft !== "object" || Array.isArray(draft)) continue;
+    const next = repairOne(draft, fallback, used);
+    if (next) repaired.push(next);
+  }
+  return repaired;
 }
 
 function leaningFromNoul(noul: number): Leaning {

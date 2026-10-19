@@ -5,6 +5,8 @@ export const ABSTAIN_TEXT =
 
 const CLOSED_START =
   /^(is|are|was|were|do|does|did|can|could|should|has|have|had|will|would)\b/i;
+const TOPIC_QUESTION =
+  /^(?:is|are|was|were)\s+(?:this|it|these|those|the\s+(?:document|file|text|pdf|attachment))\s+about\b/i;
 const OPEN_PHRASE =
   /\b(summarize|summarise|explain|rewrite|describe this|what is this|what's this|what does (this|it) say)\b/i;
 
@@ -16,6 +18,22 @@ export function shouldAnswerAsExam(question: string): boolean {
   return /^(what|who|whom|whose|when|where|why|how|which|list|extract|tell)\b/i.test(
     trimmed,
   );
+}
+
+export function isTopicQuestion(question: string): boolean {
+  return TOPIC_QUESTION.test(question.trim());
+}
+
+export function topicProposition(question: string): string {
+  const topic = question
+    .trim()
+    .replace(TOPIC_QUESTION, "")
+    .replace(/[?.!]+$/g, "")
+    .trim();
+  const sentence = topic
+    ? `The document is about ${topic}.`
+    : question.trim();
+  return sentence.slice(0, 400);
 }
 
 export function isOverviewQuestion(question: string): boolean {

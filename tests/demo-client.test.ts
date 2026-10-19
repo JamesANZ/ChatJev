@@ -27,6 +27,27 @@ describe("createDemoJevClient", () => {
     }
   });
 
+  it("answers a vague topic question instead of refusing it", async () => {
+    const document = await ingestDocument({
+      buffer: fixture("nicotine-heart.txt"),
+      filename: "nicotine-heart.txt",
+      mimeType: "text/plain",
+    });
+    const result = await askDocument(
+      createDemoJevClient(),
+      document,
+      "Is this about flights?",
+    );
+    expect(result.kind).toBe("verdict");
+    if (result.kind !== "verdict") return;
+    expect(result.judgments).toHaveLength(1);
+    expect(result.message).toContain("The document is about flights.");
+    expect(result.message).toContain("15%");
+    expect(result.message).not.toMatch(
+      /cannot summarize|specific claim|could not turn/i,
+    );
+  });
+
   it("answers summarize prompts as a sentence about the document", async () => {
     const document = await ingestDocument({
       buffer: fixture("nicotine-heart.txt"),

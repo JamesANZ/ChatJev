@@ -1,9 +1,15 @@
 import { examDrafts } from "./exam";
-import { createHeuristicLlm, type LlmClient } from "./llm";
+import {
+  createHeuristicLlm,
+  FORMULATION_ATTEMPTS,
+  formulationStrategy,
+  type LlmClient,
+} from "./llm";
 import {
   allowedPercents,
   clipEvidence,
   narrationKeepsPercents,
+  repairDrafts,
   validateQuestions,
   viewJudgment,
 } from "./questions";
@@ -14,7 +20,104 @@ import {
   type DocumentContext,
   type JevClient,
   type JevQuestion,
+  type SourceSnippet,
 } from "./types";
+
+function retryableFormulationError(error: unknown): boolean {
+  if (!(error instanceof ChatJevError)) return true;
+  if (
+    error.code === "missing_api_key" ||
+    error.code === "missing_llm_key" ||
+    error.status === 401 ||
+    error.status === 403
+  ) {
+    return false;
+  }
+  if (
+    /timeout|unavailable|rate limit|too many requests|overloaded|econn|fetch failed|network/i.test(
+      error.message,
+    )
+  ) {
+    return false;
+  }
+  return error.code === "jev_error" || error.code === "llm_error";
+}
+
+function failureNote(reason: string, attempt: number): string {
+  const next = formulationStrategy(attempt + 1);
+  const clean = reason.replace(/\s+/g, " ").trim().slice(0, 280);
+  return `${clean} Reformulate with a different shape (${next}).`;
+}
+
+function refusalMessage(error: unknown): string {
+  const detail =
+    error instanceof Error ? error.message.replace(/\s+/g, " ").trim() : "";
+  if (!detail) {
+    return "Jev could not score a formulation of that question. Try asking it a different way.";
+  }
+  return `Jev could not score a formulation of that question. ${detail}`.slice(
+    0,
+    400,
+  );
+}
+
+async function finishVerdict(input: {
+  client: JevClient;
+  llm: LlmClient;
+  document: DocumentContext | null;
+  trimmed: string;
+  clipped: { document: string; sources: string; truncated: boolean };
+  questions: Record<string, JevQuestion>;
+  snippets: SourceSnippet[];
+}): Promise<AskResult> {
+  const response = await input.client.evaluate({
+    state: {
+      filename: input.document?.filename ?? "",
+      document: input.clipped.document,
+      sources: input.clipped.sources,
+      user_question: input.trimmed,
+    },
+    questions: input.questions,
+  });
+
+  const judgments = Object.entries(input.questions).map(([key, item]) =>
+    viewJudgment(key, item, response.answers[key]),
+  );
+  const fallback = judgments.map((item) => item.line).join(" ");
+
+  let narration: string | null = null;
+  try {
+    const reading = (
+      await input.llm.narrate({
+        question: input.trimmed,
+        lines: judgments.map((item) => item.line),
+        sources: input.snippets,
+      })
+    ).trim();
+    if (
+      reading &&
+      narrationKeepsPercents(reading, allowedPercents(response.answers))
+    ) {
+      narration = reading;
+    }
+  } catch {
+    narration = null;
+  }
+
+  return {
+    kind: "verdict",
+    question: input.trimmed,
+    message: narration ?? fallback,
+    narration,
+    judgments,
+    sources: input.snippets,
+    evidenceTruncated:
+      Boolean(input.document?.truncated) || input.clipped.truncated,
+    model: response.model,
+    usage: response.usage,
+    answers: response.answers,
+  };
+}
 
 export async function askDocument(
   client: JevClient,
@@ -47,9 +150,10 @@ export async function askDocument(
 
   const clipped = clipEvidence(document?.text ?? "", formatSources(snippets));
   let feedback: string | undefined;
-  let questions: Record<string, JevQuestion> | null = null;
+  let lastError: unknown;
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt = 0; attempt < FORMULATION_ATTEMPTS; attempt += 1) {
+    const strategy = formulationStrategy(attempt);
     let drafts;
     try {
       drafts = await llm.compile({
@@ -58,86 +162,88 @@ export async function askDocument(
         document: clipped.document,
         sourcesText: clipped.sources,
         feedback,
+        attempt,
+        strategy,
       });
     } catch (error) {
-      feedback =
+      if (!retryableFormulationError(error)) throw error;
+      lastError = error;
+      feedback = failureNote(
         error instanceof Error
-          ? error.message.slice(0, 240)
-          : "The question list was not valid.";
+          ? error.message
+          : "The question list was not valid.",
+        attempt,
+      );
       continue;
     }
 
-    const candidates =
-      drafts.length > 0
-        ? drafts
-        : examDrafts({
-            question: trimmed,
-            document: clipped.document,
-            sourcesText: clipped.sources,
-          });
-
-    const validated = validateQuestions(candidates);
-    if (validated.ok) {
-      questions = validated.questions;
-      break;
+    const validated = validateQuestions(
+      repairDrafts(Array.isArray(drafts) ? drafts : [], {
+        fallbackInstructions: trimmed,
+      }),
+    );
+    if (!validated.ok || Object.keys(validated.questions).length === 0) {
+      feedback = failureNote(
+        validated.ok
+          ? "Return at least one closed question. An empty list cannot be scored."
+          : validated.error,
+        attempt,
+      );
+      continue;
     }
-    feedback = validated.error;
+
+    try {
+      return await finishVerdict({
+        client,
+        llm,
+        document,
+        trimmed,
+        clipped,
+        questions: validated.questions,
+        snippets,
+      });
+    } catch (error) {
+      if (!retryableFormulationError(error)) throw error;
+      lastError = error;
+      feedback = failureNote(
+        error instanceof Error
+          ? error.message
+          : "Jev could not score that formulation.",
+        attempt,
+      );
+    }
   }
 
-  if (!questions) {
-    return {
-      kind: "refusal",
-      question: trimmed,
-      message: feedback
-        ? `ChatJev could not turn that into a closed judgment. ${feedback}`
-        : "ChatJev could not turn that into a closed judgment. Try a more specific question.",
-    };
-  }
-
-  const response = await client.evaluate({
-    state: {
-      filename: document?.filename ?? "",
-      document: clipped.document,
-      sources: clipped.sources,
-      user_question: trimmed,
-    },
-    questions,
-  });
-
-  const judgments = Object.entries(questions).map(([key, item]) =>
-    viewJudgment(key, item, response.answers[key]),
-  );
-  const fallback = judgments.map((item) => item.line).join(" ");
-
-  let narration: string | null = null;
-  try {
-    const reading = (
-      await llm.narrate({
+  const fallback = validateQuestions(
+    repairDrafts(
+      examDrafts({
         question: trimmed,
-        lines: judgments.map((item) => item.line),
-        sources: snippets,
-      })
-    ).trim();
-    if (
-      reading &&
-      narrationKeepsPercents(reading, allowedPercents(response.answers))
-    ) {
-      narration = reading;
+        document: clipped.document,
+        sourcesText: clipped.sources,
+      }),
+      { fallbackInstructions: trimmed },
+    ),
+  );
+  if (fallback.ok && Object.keys(fallback.questions).length > 0) {
+    try {
+      return await finishVerdict({
+        client,
+        llm,
+        document,
+        trimmed,
+        clipped,
+        questions: fallback.questions,
+        snippets,
+      });
+    } catch (error) {
+      if (!retryableFormulationError(error)) throw error;
+      lastError = error;
     }
-  } catch {
-    narration = null;
   }
 
   return {
-    kind: "verdict",
+    kind: "refusal",
     question: trimmed,
-    message: narration ?? fallback,
-    narration,
-    judgments,
-    sources: snippets,
-    evidenceTruncated: Boolean(document?.truncated) || clipped.truncated,
-    model: response.model,
-    usage: response.usage,
-    answers: response.answers,
+    message: refusalMessage(lastError),
   };
 }

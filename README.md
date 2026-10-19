@@ -14,7 +14,7 @@ The TypeSafe key and the AI Gateway credential stay on the server. The browser u
 | ------------------------------------------ | --------- | ---------------------------------------------------------------------------------------- |
 | Domain (medical, legal, finance, anything) | Yes       | Jev evaluates the supplied text. There are no medical- or legal-specific schemas.        |
 | File type                                  | Partially | Jev is text-only. ChatJev extracts text from common document types and rejects the rest. |
-| Question type                              | Yes       | Yes/no claims stay direct judgments. Other questions become a multiple-choice exam that Jev scores, then a sentence. |
+| Question type                              | Yes       | Yes/no claims stay direct judgments. Other questions become a multiple-choice exam that Jev scores, then a sentence. A rejected formulation is repaired, then retried in several different shapes. |
 
 Jev’s state budget is about **32,000 tokens**. ChatJev estimates 4 characters per token and **truncates with a visible warning** rather than silently chunking.
 
