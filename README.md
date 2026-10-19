@@ -8,8 +8,6 @@ The TypeSafe key and the AI Gateway credential stay on the server. The browser u
 
 ![ChatJev judging geography, sport, and astronomy from web sources](docs/chatjev-demo.gif)
 
-![ChatJev verdict after attaching a document and asking a closed question](docs/screenshot.jpg)
-
 ## Feasibility
 
 | Layer                                      | Generic?  | What ChatJev does                                                                        |
