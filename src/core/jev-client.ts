@@ -95,16 +95,21 @@ function demoAnswer(question: JevQuestion, noul: number): JevAnswer {
           ? (keys[1] ?? keys[0])
           : (keys.at(-1) ?? keys[0]);
     const rest = (1 - noul) / Math.max(1, keys.length - 1);
-    return choiceAnswer(
-      choice,
-      Object.fromEntries(keys.map((key) => [key, key === choice ? noul : rest])),
-      0.8,
+    const probabilities = Object.fromEntries(
+      keys.map((key) => [key, key === choice ? noul : rest]),
     );
+    return choiceAnswer(choice, probabilities, 0.8);
   }
   const labels = question.criteria;
   const max = labels.length - 1;
   const score =
-    noul >= 0.75 ? max : noul >= 0.6 ? Math.max(1, max - 1) : noul >= 0.4 ? 1 : 0;
+    noul >= 0.75
+      ? max
+      : noul >= 0.6
+        ? Math.max(1, max - 1)
+        : noul >= 0.4
+          ? 1
+          : 0;
   return scoreAnswer(
     score,
     Object.fromEntries(labels.map((label, index) => [String(index), label])),
@@ -154,7 +159,8 @@ export function createDemoJevClient(): JevClient {
       );
     }
 
-    const haystack = `${state.document ?? ""} ${state.sources ?? ""}`.toLowerCase();
+    const haystack =
+      `${state.document ?? ""} ${state.sources ?? ""}`.toLowerCase();
     const noul = overlap(question || "claim", haystack);
     const answers: Record<string, JevAnswer> = {};
     for (const [key, item] of Object.entries(request.questions)) {

@@ -34,7 +34,7 @@ npm install
 cp .env.example .env.local
 ```
 
-Set `TYPESAFE_API_KEY` in `.env.local`. The compiler defaults to DeepSeek (`DEEPSEEK_API_KEY`, model `deepseek-chat`) and looks up the web with `TAVILY_API_KEY`. Set `CHATJEV_LLM_PROVIDER=openai` to use `OPENAI_API_KEY` and `CHATJEV_LLM_MODEL` instead, or `CHATJEV_LLM_PROVIDER=gateway` to use the Vercel AI Gateway and Perplexity search (`AI_GATEWAY_API_KEY` or a `VERCEL_OIDC_TOKEN` from `vercel env pull`). Optional: `TYPESAFE_DEFAULT_MODEL` (defaults to `jev-latest`).
+Set `TYPESAFE_API_KEY` in `.env.local`. The compiler defaults to DeepSeek (`DEEPSEEK_API_KEY`, model `deepseek-chat`) and looks up the web with TinyFish through Monid (`MONID_API_KEY`). Set `CHATJEV_LLM_PROVIDER=openai` to use `OPENAI_API_KEY` and `CHATJEV_LLM_MODEL` instead, or `CHATJEV_LLM_PROVIDER=gateway` to use the Vercel AI Gateway and Perplexity search (`AI_GATEWAY_API_KEY` or a `VERCEL_OIDC_TOKEN` from `vercel env pull`). Optional: `TYPESAFE_DEFAULT_MODEL` (defaults to `jev-latest`).
 
 ```bash
 npm test

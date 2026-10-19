@@ -2,6 +2,7 @@ import { jsonSchema, tool } from "ai";
 import { createOpenAI, openai } from "@ai-sdk/openai";
 import { ChatJevError } from "./types";
 import { createModelLlm, DEFAULT_LLM_MODEL } from "./gateway-llm";
+import { searchTinyFish } from "./tinyfish";
 
 function openaiModelId(): string {
   const configured = process.env.CHATJEV_LLM_MODEL || DEFAULT_LLM_MODEL;
@@ -10,7 +11,7 @@ function openaiModelId(): string {
     : configured;
 }
 
-export function tavilySearchTool() {
+export function tinyFishSearchTool() {
   return tool({
     description:
       "Search the web and return titles, URLs, and excerpts. This does not decide whether a claim is true.",
@@ -21,47 +22,8 @@ export function tavilySearchTool() {
       properties: { query: { type: "string" } },
     }),
     execute: async ({ query }) => {
-      const apiKey = process.env.TAVILY_API_KEY;
-      if (!apiKey) {
-        throw new ChatJevError(
-          503,
-          "missing_search_key",
-          "TAVILY_API_KEY is not set, so ChatJev cannot look up web evidence.",
-        );
-      }
-
-      const response = await fetch("https://api.tavily.com/search", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          query,
-          max_results: 5,
-          search_depth: "basic",
-          include_answer: false,
-        }),
-      });
-      if (!response.ok) {
-        throw new ChatJevError(
-          502,
-          "search_error",
-          `Web search failed (${response.status}).`,
-        );
-      }
-
-      const body = (await response.json()) as {
-        results?: Array<{ title?: string; url?: string; content?: string }>;
-      };
-      return {
-        id: "tavily",
-        results: (body.results ?? []).map((row) => ({
-          title: row.title || row.url || "Source",
-          url: row.url ?? "",
-          snippet: row.content ?? "",
-        })),
-      };
+      const results = await searchTinyFish(query);
+      return { id: "tinyfish", results };
     },
   });
 }
@@ -76,7 +38,7 @@ export function createOpenAiLlm() {
   }
   return createModelLlm({
     model: openai(openaiModelId()),
-    searchTool: tavilySearchTool(),
+    searchTool: tinyFishSearchTool(),
   });
 }
 
@@ -102,6 +64,6 @@ export function createDeepSeekLlm() {
   });
   return createModelLlm({
     model: deepseek.chat(modelId),
-    searchTool: tavilySearchTool(),
+    searchTool: tinyFishSearchTool(),
   });
 }
