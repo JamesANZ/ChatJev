@@ -6,7 +6,7 @@ Jev is not a chat model. It takes text as `state` and returns typed judgments (`
 
 The TypeSafe key and the AI Gateway credential stay on the server. The browser uploads a file and asks questions.
 
-![ChatJev judging geography, sport, and astronomy from web sources](docs/chatjev-demo.gif)
+![ChatJev judging whether Sam Altman is a doctor, whether Vikings wore horned helmets, and whether a hot dog is a sandwich](docs/chatjev-demo.gif)
 
 ## Feasibility
 
