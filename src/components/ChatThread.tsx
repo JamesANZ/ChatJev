@@ -13,28 +13,32 @@ type ChatThreadProps = {
 };
 
 export function ChatThread({ messages, pending }: ChatThreadProps) {
-  if (messages.length === 0 && !pending) {
-    return (
-      <p className="empty">
-        Ask in your own words. Attach a file, or ask something ChatJev can look
-        up.
-      </p>
-    );
-  }
-
   return (
     <div className="thread">
       {messages.map((message) =>
         message.role === "user" ? (
-          <div className="bubble" key={message.id}>
-            {message.text}
-          </div>
+          <article className="turn user" key={message.id}>
+            <div className="bubble">{message.text}</div>
+          </article>
         ) : (
-          <VerdictCard key={message.id} result={message.result} />
+          <article className="turn assistant" key={message.id}>
+            <div className="who">Jev</div>
+            <VerdictCard result={message.result} />
+          </article>
         ),
       )}
       {pending ? (
-        <section className="notice">Jev is judging…</section>
+        <article className="turn assistant">
+          <div className="who">Jev</div>
+          <div className="thinking" role="status" aria-live="polite">
+            <span className="dots" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </span>
+            Judging the evidence
+          </div>
+        </article>
       ) : null}
     </div>
   );
