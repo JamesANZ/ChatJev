@@ -144,7 +144,7 @@ export async function askDocument(
     throw new ChatJevError(
       400,
       "missing_evidence",
-      "Attach a document or ask something the web can supply evidence for.",
+      "ChatJev could not find web evidence for that question. Check the search key, or attach a document.",
     );
   }
 

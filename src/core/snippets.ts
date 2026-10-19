@@ -26,11 +26,24 @@ export function extractSnippets(steps: ToolStep[]): SourceSnippet[] {
 
       for (const item of results) {
         if (!item || typeof item !== "object") continue;
-        const row = item as { title?: unknown; url?: unknown; snippet?: unknown };
+        const row = item as {
+          title?: unknown;
+          url?: unknown;
+          snippet?: unknown;
+          excerpt?: unknown;
+          content?: unknown;
+        };
+        const excerpt =
+          typeof row.snippet === "string"
+            ? row.snippet
+            : typeof row.excerpt === "string"
+              ? row.excerpt
+              : typeof row.content === "string"
+                ? row.content
+                : "";
         if (
-          typeof row.title !== "string" ||
           typeof row.url !== "string" ||
-          typeof row.snippet !== "string" ||
+          !excerpt.trim() ||
           !isHttpUrl(row.url)
         ) {
           continue;
@@ -38,9 +51,9 @@ export function extractSnippets(steps: ToolStep[]): SourceSnippet[] {
         if (seen.has(row.url)) continue;
         seen.add(row.url);
         found.push({
-          title: row.title.trim() || row.url,
+          title: typeof row.title === "string" && row.title.trim() ? row.title.trim() : row.url,
           url: row.url,
-          excerpt: row.snippet.trim(),
+          excerpt: excerpt.trim(),
         });
         if (found.length >= 5) return found;
       }

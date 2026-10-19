@@ -1,4 +1,4 @@
-import { ChatJevError } from "./types";
+import { ChatJevError, type SourceSnippet } from "./types";
 
 const MONID_BASE = "https://api.monid.ai";
 const POLL_INTERVAL_MS = 1000;
@@ -89,6 +89,16 @@ async function pollRun(runId: string, apiKey: string): Promise<MonidRun> {
     "search_error",
     "TinyFish search did not finish in time.",
   );
+}
+
+export async function lookupWeb(query: string): Promise<SourceSnippet[]> {
+  if (!process.env.MONID_API_KEY) return [];
+  const hits = await searchTinyFish(query);
+  return hits.map((hit) => ({
+    title: hit.title,
+    url: hit.url,
+    excerpt: hit.snippet,
+  }));
 }
 
 export async function searchTinyFish(query: string): Promise<TinyFishHit[]> {

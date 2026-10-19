@@ -2,7 +2,7 @@ import { jsonSchema, tool } from "ai";
 import { createOpenAI, openai } from "@ai-sdk/openai";
 import { ChatJevError } from "./types";
 import { createModelLlm, DEFAULT_LLM_MODEL } from "./gateway-llm";
-import { searchTinyFish } from "./tinyfish";
+import { lookupWeb, searchTinyFish } from "./tinyfish";
 
 function openaiModelId(): string {
   const configured = process.env.CHATJEV_LLM_MODEL || DEFAULT_LLM_MODEL;
@@ -39,6 +39,7 @@ export function createOpenAiLlm() {
   return createModelLlm({
     model: openai(openaiModelId()),
     searchTool: tinyFishSearchTool(),
+    lookup: lookupWeb,
   });
 }
 
@@ -65,5 +66,6 @@ export function createDeepSeekLlm() {
   return createModelLlm({
     model: deepseek.chat(modelId),
     searchTool: tinyFishSearchTool(),
+    lookup: lookupWeb,
   });
 }

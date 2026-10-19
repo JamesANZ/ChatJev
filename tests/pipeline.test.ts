@@ -66,6 +66,11 @@ describe("extractSnippets", () => {
                   url: "ftp://example.com/a",
                   snippet: "Skip.",
                 },
+                {
+                  title: "Page",
+                  url: "https://example.com/page",
+                  content: "A longer extract.",
+                },
               ],
             },
           },
@@ -77,6 +82,11 @@ describe("extractSnippets", () => {
         title: "Study",
         url: "https://example.com/a",
         excerpt: "A finding.",
+      },
+      {
+        title: "Page",
+        url: "https://example.com/page",
+        excerpt: "A longer extract.",
       },
     ]);
   });

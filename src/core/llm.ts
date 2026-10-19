@@ -1,5 +1,10 @@
 import { compileEvaluation } from "./compile";
 import {
+  claimProposition,
+  needsWebEvidence,
+  webClaimDrafts,
+} from "./evidence";
+import {
   examDrafts,
   isTopicQuestion,
   shouldAnswerAsExam,
@@ -78,7 +83,9 @@ export function createHeuristicLlm(): LlmClient {
       if (strategy === "proposition") {
         const instructions = isTopicQuestion(input.question)
           ? topicProposition(input.question)
-          : input.question.trim().slice(0, 400);
+          : needsWebEvidence(input.question, input.document)
+            ? claimProposition(input.question)
+            : input.question.trim().slice(0, 400);
         return [
           {
             key: "claim",
@@ -95,6 +102,10 @@ export function createHeuristicLlm(): LlmClient {
             instructions: topicProposition(input.question),
           },
         ];
+      }
+      if (needsWebEvidence(input.question, input.document)) {
+        if (shouldAnswerAsExam(input.question)) return examDrafts(input);
+        return webClaimDrafts(input.question);
       }
       if (shouldAnswerAsExam(input.question)) return examDrafts(input);
       const request = compileEvaluation(

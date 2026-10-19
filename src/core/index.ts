@@ -6,6 +6,7 @@ export * from "./typesafe-client";
 export * from "./classify";
 export * from "./compile";
 export * from "./exam";
+export * from "./evidence";
 export * from "./verdict";
 export * from "./questions";
 export * from "./snippets";
