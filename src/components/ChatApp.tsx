@@ -198,18 +198,30 @@ export function ChatApp() {
         {empty ? (
           <div className="hero">
             <h1>What should Jev judge?</h1>
-            <p>
-              ChatJev lets you chat with Jev like a normal chatbot. An LLM and a
-              web scraper turn your question into something Jev can judge, then
-              turn Jev’s result back into a reply. Because Jev scores the
-              sources instead of writing the answer itself, it typically cannot
-              invent facts the way a normal chatbot does.
+            <p className="hero-lead">
+              Chat with Jev in plain language. It scores sources instead of
+              writing the answer, so it typically cannot invent facts.
             </p>
-            <p>
-              Ask in plain language. If a file does not answer, ChatJev looks
-              the question up, gives Jev those sources, and reads the scores
-              back.
-            </p>
+            <ol className="hero-steps">
+              <li>
+                <h2>Ask like a normal chatbot</h2>
+                <p>
+                  An LLM and a web scraper turn your question into something
+                  Jev can judge.
+                </p>
+              </li>
+              <li>
+                <h2>Give Jev the sources</h2>
+                <p>
+                  If a file does not answer, ChatJev looks the question up and
+                  passes those sources along.
+                </p>
+              </li>
+              <li>
+                <h2>Read the scores back</h2>
+                <p>ChatJev turns Jev’s result into a reply.</p>
+              </li>
+            </ol>
             <div className="suggestions">
               {SUGGESTIONS.map((prompt) => (
                 <button
