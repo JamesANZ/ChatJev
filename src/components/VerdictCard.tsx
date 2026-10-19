@@ -20,13 +20,15 @@ export function VerdictCard({ result }: VerdictCardProps) {
   }
 
   const primary = primaryNoul(result.judgments);
-  const leaning = primary?.leaning ?? "unsure";
-  const width = `${Math.round((primary?.noul ?? 0) * 100)}%`;
+  const choice = result.judgments.find((item) => item.type === "choice");
+  const leaning = primary?.leaning ?? choice?.leaning ?? "unsure";
+  const amount = primary?.noul ?? choice?.confidence ?? 0;
+  const width = `${Math.round(amount * 100)}%`;
 
   return (
     <section className={`verdict ${leaning}`}>
       {result.narration ? <h2>{result.narration}</h2> : null}
-      {primary ? (
+      {primary || choice ? (
         <div className="meter" aria-hidden="true">
           <span style={{ width }} />
         </div>

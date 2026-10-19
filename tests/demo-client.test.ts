@@ -27,7 +27,7 @@ describe("createDemoJevClient", () => {
     }
   });
 
-  it("refuses summarize prompts", async () => {
+  it("answers summarize prompts as a sentence about the document", async () => {
     const document = await ingestDocument({
       buffer: fixture("nicotine-heart.txt"),
       filename: "nicotine-heart.txt",
@@ -38,6 +38,10 @@ describe("createDemoJevClient", () => {
       document,
       "summarize this",
     );
-    expect(result.kind).toBe("refusal");
+    expect(result.kind).toBe("verdict");
+    if (result.kind === "verdict") {
+      expect(result.message).toMatch(/74%/);
+      expect(result.message.toLowerCase()).toContain("nicotine");
+    }
   });
 });

@@ -1,3 +1,4 @@
+import { examDrafts } from "./exam";
 import { createHeuristicLlm, type LlmClient } from "./llm";
 import {
   allowedPercents,
@@ -7,7 +8,6 @@ import {
   viewJudgment,
 } from "./questions";
 import { formatSources } from "./snippets";
-import { REFUSAL_MESSAGE } from "./verdict";
 import {
   ChatJevError,
   type AskResult,
@@ -67,15 +67,16 @@ export async function askDocument(
       continue;
     }
 
-    if (drafts.length === 0) {
-      return {
-        kind: "refusal",
-        question: trimmed,
-        message: REFUSAL_MESSAGE,
-      };
-    }
+    const candidates =
+      drafts.length > 0
+        ? drafts
+        : examDrafts({
+            question: trimmed,
+            document: clipped.document,
+            sourcesText: clipped.sources,
+          });
 
-    const validated = validateQuestions(drafts);
+    const validated = validateQuestions(candidates);
     if (validated.ok) {
       questions = validated.questions;
       break;

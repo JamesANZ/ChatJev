@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { askDocument } from "../src/core/ask";
 import { ingestDocument } from "../src/core/ingest";
 import type { LlmClient } from "../src/core/llm";
-import { FakeJevClient, noulAnswer } from "../src/core/jev-client";
+import { createDemoJevClient, FakeJevClient, noulAnswer } from "../src/core/jev-client";
 import type { QuestionDraft, SourceSnippet } from "../src/core/types";
 import { fixture, MEDICAL_QUESTION } from "./helpers";
 
@@ -134,22 +134,22 @@ describe("askDocument", () => {
     expect(client.calls).toHaveLength(1);
   });
 
-  it("refuses when the compiler returns no judgments", async () => {
+  it("turns an empty compiler result into a scored exam sentence", async () => {
     const document = await ingestDocument({
       buffer: fixture("nicotine-heart.txt"),
       filename: "nicotine-heart.txt",
       mimeType: "text/plain",
     });
-    const client = new FakeJevClient(() => {
-      throw new Error("should not judge");
-    });
     const result = await askDocument(
-      client,
+      createDemoJevClient(),
       document,
       "summarize this",
       llm({ drafts: [] }),
     );
-    expect(result.kind).toBe("refusal");
-    expect(client.calls).toHaveLength(0);
+    expect(result.kind).toBe("verdict");
+    if (result.kind !== "verdict") return;
+    expect(result.judgments[0]?.type).toBe("choice");
+    expect(result.message).toMatch(/74%/);
+    expect(result.message.toLowerCase()).toContain("nicotine");
   });
 });

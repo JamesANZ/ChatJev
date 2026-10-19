@@ -198,18 +198,46 @@ export function viewJudgment(
     };
   }
 
-  if (answer.type === "choice") {
+  if (answer.type === "choice" && question.type === "choice") {
+    const label = question.criteria[answer.choice] ?? answer.choice;
+    const probability =
+      answer.probabilities[answer.choice] ?? answer.confidence;
+    const runnerUp = Object.entries(answer.probabilities)
+      .filter(([option]) => option !== answer.choice)
+      .sort((left, right) => right[1] - left[1])[0];
+    const silent =
+      answer.choice === "abstain" ||
+      /does not contain enough information/i.test(label);
+    const split = Boolean(
+      runnerUp && probability - runnerUp[1] < 0.12 && !silent,
+    );
+    const other = runnerUp
+      ? (question.criteria[runnerUp[0]] ?? runnerUp[0])
+      : "";
+    const line = silent
+      ? `Jev thinks the evidence is silent on “${question.instructions}” with a ${percent(probability)} probability.`
+      : split
+        ? `Jev is split on “${question.instructions}”: “${label}” (${percent(probability)}) or “${other}” (${percent(runnerUp?.[1] ?? 0)}).`
+        : probability >= UNSURE_HIGH
+          ? `Jev thinks “${label}” with a ${percent(probability)} probability.`
+          : `Jev leans toward “${label}” with a ${percent(probability)} probability.`;
     return {
       key,
       instructions: question.instructions,
       type: "choice",
       choice: answer.choice,
-      confidence: answer.confidence,
-      line: `Jev chooses ${answer.choice} for “${question.instructions}” (${percent(answer.confidence)} confidence).`,
+      confidence: probability,
+      leaning: silent || split || probability < UNSURE_HIGH ? "unsure" : "yes",
+      label,
+      line,
     };
   }
 
-  const max = question.type === "score" ? question.criteria.length - 1 : 0;
+  if (answer.type !== "score" || question.type !== "score") {
+    throw new Error(`Jev did not return a score answer for "${key}".`);
+  }
+
+  const max = question.criteria.length - 1;
   const index = Math.min(max, Math.max(0, Math.round(answer.score)));
   const label =
     answer.legend[String(index)] ??

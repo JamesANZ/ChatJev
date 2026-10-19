@@ -1,4 +1,5 @@
 import { compileEvaluation } from "./compile";
+import { examDrafts, shouldAnswerAsExam } from "./exam";
 import type { QuestionDraft, SourceSnippet } from "./types";
 
 export type GatherInput = {
@@ -27,15 +28,13 @@ export interface LlmClient {
   narrate(input: NarrateInput): Promise<string>;
 }
 
-const OPEN_ENDED = /\b(summarize|explain|rewrite|what does it say)\b/i;
-
 export function createHeuristicLlm(): LlmClient {
   return {
     async gather() {
       return [];
     },
     async compile(input) {
-      if (OPEN_ENDED.test(input.question)) return [];
+      if (shouldAnswerAsExam(input.question)) return examDrafts(input);
       const request = compileEvaluation(
         input.filename || "evidence",
         input.document,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createDemoJevClient } from "../src/core/jev-client";
 import { ingestDocument } from "../src/core/ingest";
 import { handleAsk, handleUpload } from "../src/lib/http";
 import {
@@ -6,7 +7,6 @@ import {
   judgmentClassification,
   MEDICAL_QUESTION,
   medicalEvaluation,
-  openEndedClassification,
   scriptedJev,
 } from "./helpers";
 
@@ -61,7 +61,7 @@ describe("HTTP routes", () => {
     expect(body.message).toContain(MEDICAL_QUESTION);
   });
 
-  it("refuses open-ended asks after a document is attached", async () => {
+  it("answers open-ended asks as a sentence after a document is attached", async () => {
     const created = await attach(
       "nicotine-heart.txt",
       fixture("nicotine-heart.txt"),
@@ -72,13 +72,15 @@ describe("HTTP routes", () => {
       new Request("http://localhost/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: "summarize this", document }),
+        body: JSON.stringify({ question: "What is this about?", document }),
       }),
-      scriptedJev(openEndedClassification()),
+      createDemoJevClient(),
     );
     const body = (await asked.json()) as { kind: string; message: string };
-    expect(body.kind).toBe("refusal");
-    expect(body.message).toMatch(/cannot summarize/i);
+    expect(asked.status).toBe(200);
+    expect(body.kind).toBe("verdict");
+    expect(body.message).toMatch(/74%/);
+    expect(body.message.toLowerCase()).toContain("nicotine");
   });
 
   it("returns 400 when asking without a document", async () => {
