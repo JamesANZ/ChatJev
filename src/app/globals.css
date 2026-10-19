@@ -15,6 +15,7 @@
   --unsure-fill: #f8f0d8;
   --shadow: 0 8px 28px rgba(13, 13, 13, 0.05);
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --column: 48rem;
   color-scheme: light;
 }
 
@@ -221,7 +222,7 @@ button {
 }
 
 .setup-warning {
-  width: min(720px, 100%);
+  width: min(var(--column), 100%);
   margin: 0 auto;
   background: #fff8e8;
   border: 1px solid #f0e0b0;
@@ -255,13 +256,13 @@ button {
 }
 
 .stage-inner {
-  width: min(720px, calc(100% - 32px));
+  width: min(var(--column), calc(100% - 32px));
   margin: 0 auto;
-  padding: 20px 0 40px;
+  padding: 24px 0 48px;
 }
 
 .hero {
-  width: min(520px, calc(100% - 48px));
+  width: min(var(--column), calc(100% - 32px));
   margin-inline: auto;
   flex-shrink: 0;
   text-align: center;
@@ -277,8 +278,8 @@ button {
 }
 
 .hero-lead {
-  margin: 14px auto 0;
-  max-width: 28rem;
+  margin: 16px auto 0;
+  max-width: 40rem;
   color: var(--ink-soft);
   font-size: 1.02rem;
   line-height: 1.55;
@@ -287,7 +288,7 @@ button {
 .hero-steps {
   list-style: none;
   counter-reset: step;
-  margin: 28px 0 0;
+  margin: 32px auto 0;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -337,8 +338,8 @@ button {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
-  margin-top: 28px;
+  gap: 10px;
+  margin-top: 36px;
 }
 
 .suggestion {
@@ -393,7 +394,7 @@ button {
 }
 
 .bubble {
-  max-width: min(85%, 520px);
+  max-width: min(85%, 40rem);
   background: var(--bg-soft);
   border-radius: 22px;
   padding: 10px 16px;
@@ -509,7 +510,7 @@ button {
 }
 
 .source-link {
-  max-width: min(100%, 16.5rem);
+  max-width: min(100%, 24rem);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -594,7 +595,7 @@ button {
 }
 
 .dock-inner {
-  width: min(720px, 100%);
+  width: min(var(--column), 100%);
   margin: 0 auto;
 }
 
@@ -731,6 +732,16 @@ button {
   place-items: center;
   color: var(--ink-soft);
   flex-shrink: 0;
+}
+
+.file-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #fff;
+  border: 1px solid var(--line);
 }
 
 .file-copy {
