@@ -67,9 +67,9 @@ export function ChatApp() {
       <header className="masthead">
         <h1>ChatJev</h1>
         <p>
-          Attach a document, then ask closed questions. Jev returns
+          Attach a document, then ask anything about it. Jev returns
           probabilities, not essays — ChatJev turns those into a readable
-          verdict.
+          sentence.
         </p>
       </header>
 

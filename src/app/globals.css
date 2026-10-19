@@ -225,6 +225,42 @@ textarea {
   color: var(--ink-soft);
 }
 
+.verdict ul.exam-options {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.exam-options li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: start;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--paper-deep);
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+.exam-options b {
+  font-family: var(--font-mono), "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.exam-options li.selected {
+  background: var(--yes-fill);
+}
+
+.verdict.unsure .exam-options li.selected {
+  background: var(--unsure-fill);
+}
+
 .composer {
   display: flex;
   gap: 10px;

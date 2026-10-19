@@ -23,7 +23,8 @@ const serif = Source_Serif_4({
 
 export const metadata: Metadata = {
   title: "ChatJev",
-  description: "Attach a document and ask Jev closed questions about it.",
+  description:
+    "Attach a document and ask Jev anything about it. Answers come back as probabilities turned into a sentence.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

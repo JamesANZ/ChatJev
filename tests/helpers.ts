@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { ABSTAIN_TEXT, type Exam } from "../src/core/exam";
 import {
   choiceAnswer,
   FakeJevClient,
@@ -71,6 +72,38 @@ export function medicalEvaluation(): JevResponse {
         3,
         STRENGTH_LEGEND,
         { "0": 0.02, "1": 0.06, "2": 0.18, "3": 0.74 },
+        0.8,
+      ),
+    },
+  };
+}
+
+export function nicotineExam(): Exam {
+  return {
+    options: [
+      {
+        key: "a",
+        text: "The document reviews cohort studies linking nicotine exposure with heart disease.",
+        abstain: false,
+      },
+      {
+        key: "b",
+        text: "The document is a recipe for bread.",
+        abstain: false,
+      },
+      { key: "abstain", text: ABSTAIN_TEXT, abstain: true },
+    ],
+  };
+}
+
+export function examEvaluation(): JevResponse {
+  return {
+    model: "jev-test",
+    usage: { input_tokens: 300, output_tokens: 12 },
+    answers: {
+      answer: choiceAnswer(
+        "a",
+        { a: 0.74, b: 0.16, abstain: 0.1 },
         0.8,
       ),
     },

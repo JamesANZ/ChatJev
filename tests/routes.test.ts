@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { ingestDocument } from "../src/core/ingest";
 import { handleAsk, handleUpload } from "../src/lib/http";
+import type { ExamDesigner } from "../src/core/exam-designer";
 import {
+  examEvaluation,
   fixture,
   judgmentClassification,
   MEDICAL_QUESTION,
   medicalEvaluation,
-  openEndedClassification,
+  nicotineExam,
   scriptedJev,
 } from "./helpers";
 
@@ -57,12 +59,17 @@ describe("HTTP routes", () => {
     expect(body.message).toContain(MEDICAL_QUESTION);
   });
 
-  it("refuses open-ended asks after a document is attached", async () => {
+  it("answers open-ended asks as a sentence after a document is attached", async () => {
     const created = await attach(
       "nicotine-heart.txt",
       fixture("nicotine-heart.txt"),
     );
     const document = await created.json();
+    const designer: ExamDesigner = {
+      async design() {
+        return { ...nicotineExam(), model: "test-exam" };
+      },
+    };
 
     const asked = await handleAsk(
       new Request("http://localhost/api/ask", {
@@ -70,11 +77,21 @@ describe("HTTP routes", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: "summarize this", document }),
       }),
-      scriptedJev(openEndedClassification()),
+      scriptedJev(judgmentClassification(), examEvaluation()),
+      designer,
     );
-    const body = (await asked.json()) as { kind: string; message: string };
-    expect(body.kind).toBe("refusal");
-    expect(body.message).toMatch(/cannot summarize/i);
+    const body = (await asked.json()) as {
+      kind: string;
+      message: string;
+      verdict: { mode: string };
+      examModel: string;
+    };
+    expect(asked.status).toBe(200);
+    expect(body.kind).toBe("verdict");
+    expect(body.verdict.mode).toBe("exam");
+    expect(body.message).toContain("74%");
+    expect(body.message.toLowerCase()).toContain("nicotine");
+    expect(body.examModel).toBe("test-exam");
   });
 
   it("returns 400 when asking without a document", async () => {

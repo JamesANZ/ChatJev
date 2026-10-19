@@ -1,4 +1,5 @@
 import { askDocument } from "@/core/ask";
+import type { ExamDesigner } from "@/core/exam-designer";
 import { ingestDocument } from "@/core/ingest";
 import {
   ChatJevError,
@@ -45,6 +46,7 @@ export async function handleUpload(request: Request): Promise<Response> {
 export async function handleAsk(
   request: Request,
   jev: JevClient,
+  designer?: ExamDesigner,
 ): Promise<Response> {
   try {
     const payload = (await request.json().catch(() => ({}))) as {
@@ -88,7 +90,9 @@ export async function handleAsk(
       truncated: Boolean(payload.document?.truncated),
     };
 
-    return json(await askDocument(jev, document, payload.question));
+    return json(
+      await askDocument(jev, document, payload.question, designer),
+    );
   } catch (error) {
     return errorResponse(error);
   }

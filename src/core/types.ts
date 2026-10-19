@@ -104,7 +104,8 @@ export const STRENGTH_CRITERIA = [
   "Strong and explicit",
 ] as const;
 
-export type Verdict = {
+export type JudgmentVerdict = {
+  mode: "judgment";
   headline: string;
   noul: number;
   leaning: Leaning;
@@ -116,6 +117,28 @@ export type Verdict = {
   details: string[];
 };
 
+export type ExamOptionResult = {
+  key: string;
+  text: string;
+  probability: number;
+  abstain: boolean;
+};
+
+export type ExamVerdict = {
+  mode: "exam";
+  headline: string;
+  leaning: Leaning;
+  probability: number;
+  selectedKey: string;
+  selectedText: string;
+  abstain: boolean;
+  split: boolean;
+  options: ExamOptionResult[];
+  details: string[];
+};
+
+export type Verdict = JudgmentVerdict | ExamVerdict;
+
 export type AskResult =
   | {
       kind: "verdict";
@@ -125,6 +148,7 @@ export type AskResult =
       model: string;
       usage: JevUsage;
       answers: Record<string, JevAnswer>;
+      examModel?: string;
     }
   | {
       kind: "refusal";

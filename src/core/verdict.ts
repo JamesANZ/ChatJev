@@ -1,16 +1,19 @@
+import {
+  EXAM_CONFIDENT,
+  EXAM_SPLIT_GAP,
+  type Exam,
+} from "./exam";
 import { requireChoice, requireNoul, requireScore } from "./jev-client";
 import {
   STRENGTH_CRITERIA,
   UNSURE_HIGH,
   UNSURE_LOW,
+  type ExamVerdict,
   type JevAnswer,
   type Leaning,
   type Relation,
   type Verdict,
 } from "./types";
-
-export const REFUSAL_MESSAGE =
-  "Jev cannot summarize, explain, or rewrite a document. Ask whether the attached document supports, contradicts, or is silent on a specific claim.";
 
 function percent(value: number): string {
   return `${Math.round(value * 100)}%`;
@@ -75,6 +78,7 @@ export function formatVerdict(
   ];
 
   return {
+    mode: "judgment",
     headline,
     noul,
     leaning,
@@ -84,6 +88,82 @@ export function formatVerdict(
     strengthScore: strength.score,
     strengthMax,
     details,
+  };
+}
+
+function examHeadline(
+  question: string,
+  selected: ExamVerdict["options"][number],
+  runnerUp: ExamVerdict["options"][number] | undefined,
+  split: boolean,
+): string {
+  const quoted = `“${question.trim()}”`;
+  if (selected.abstain) {
+    return `Jev thinks the document is silent on ${quoted} with a ${percent(selected.probability)} probability.`;
+  }
+  if (split && runnerUp) {
+    return `Jev is split on ${quoted}: “${selected.text}” (${percent(selected.probability)}) or “${runnerUp.text}” (${percent(runnerUp.probability)}).`;
+  }
+  const verb =
+    selected.probability >= EXAM_CONFIDENT ? "thinks" : "leans toward";
+  return `Jev ${verb} “${selected.text}” with a ${percent(selected.probability)} probability.`;
+}
+
+export function formatExamVerdict(
+  question: string,
+  exam: Exam,
+  answer: {
+    choice: string;
+    probabilities: Record<string, number>;
+    confidence: number;
+  },
+): ExamVerdict {
+  const options = exam.options.map((option) => ({
+    key: option.key,
+    text: option.text,
+    abstain: option.abstain,
+    probability: answer.probabilities[option.key] ?? 0,
+  }));
+  const selected = options.find((option) => option.key === answer.choice);
+  if (!selected) {
+    throw new Error(
+      `Expected exam choice "${answer.choice}" to match a designed option`,
+    );
+  }
+
+  const ranked = [...options].sort(
+    (left, right) => right.probability - left.probability,
+  );
+  const runnerUp = ranked.find((option) => option.key !== selected.key);
+  const split = Boolean(
+    runnerUp &&
+      selected.probability - runnerUp.probability < EXAM_SPLIT_GAP &&
+      !selected.abstain,
+  );
+  const leaning: Leaning =
+    selected.abstain || split || selected.probability < EXAM_CONFIDENT
+      ? "unsure"
+      : "yes";
+  const mentioned = new Set([selected.key]);
+  if (split && runnerUp) mentioned.add(runnerUp.key);
+
+  return {
+    mode: "exam",
+    headline: examHeadline(question, selected, runnerUp, split),
+    leaning,
+    probability: selected.probability,
+    selectedKey: selected.key,
+    selectedText: selected.text,
+    abstain: selected.abstain,
+    split,
+    options: ranked,
+    details: ranked
+      .filter((option) => !mentioned.has(option.key))
+      .slice(0, 2)
+      .map(
+        (option) =>
+          `Also possible: “${option.text}” (${percent(option.probability)}).`,
+      ),
   };
 }
 
