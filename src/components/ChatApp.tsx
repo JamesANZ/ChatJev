@@ -1,12 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { DocumentContext } from "@/core/types";
 import { askAttachedDocument, uploadDocument } from "@/lib/client";
 import { ChatThread, type ChatItem } from "./ChatThread";
 import { DropZone } from "./DropZone";
 import { FileChip } from "./FileChip";
 import { MessageInput } from "./MessageInput";
+
+const SETUP_CODES = new Set([
+  "missing_api_key",
+  "missing_llm_key",
+  "missing_search_key",
+  "missing_evidence",
+]);
 
 function nextId(): string {
   return crypto.randomUUID();
@@ -17,6 +24,26 @@ export function ChatApp() {
   const [messages, setMessages] = useState<ChatItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [setupNotices, setSetupNotices] = useState<string[]>([]);
+  const [askNotice, setAskNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/setup")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: { issues?: Array<{ message?: string }> } | null) => {
+        if (cancelled || !body?.issues) return;
+        setSetupNotices(
+          body.issues
+            .map((issue) => issue.message)
+            .filter((message): message is string => Boolean(message)),
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function onFile(file: File) {
     setError(null);
@@ -42,16 +69,21 @@ export function ChatApp() {
     setBusy(true);
     try {
       const result = await askAttachedDocument(document, question);
+      setAskNotice(result.kind === "verdict" ? (result.warning ?? null) : null);
       setMessages((current) => [
         ...current,
         { id: nextId(), role: "assistant", result },
       ]);
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Jev could not answer that question.",
-      );
+      const message =
+        err instanceof Error ? err.message : "Jev could not answer that question.";
+      const code = err instanceof Error && "code" in err ? String(err.code) : "";
+      if (SETUP_CODES.has(code) || /API_KEY|AI Gateway|not set|web evidence/i.test(message)) {
+        setAskNotice(message);
+        setError(null);
+      } else {
+        setError(message);
+      }
     } finally {
       setBusy(false);
     }
@@ -66,6 +98,14 @@ export function ChatApp() {
           question up, gives Jev those sources, and reads the scores back.
         </p>
       </header>
+
+      {setupNotices.length > 0 || askNotice ? (
+        <div className="setup-warning" role="alert">
+          {[...setupNotices, ...(askNotice ? [askNotice] : [])].map((notice) => (
+            <p key={notice}>{notice}</p>
+          ))}
+        </div>
+      ) : null}
 
       {document ? (
         <FileChip

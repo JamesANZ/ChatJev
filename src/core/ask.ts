@@ -1,4 +1,6 @@
+import { needsWebEvidence } from "./evidence";
 import { examDrafts } from "./exam";
+import { MODEL_FALLBACK_WARNING, SEARCH_MISSED_WARNING } from "./setup";
 import {
   createHeuristicLlm,
   FORMULATION_ATTEMPTS,
@@ -69,6 +71,7 @@ async function finishVerdict(input: {
   clipped: { document: string; sources: string; truncated: boolean };
   questions: Record<string, JevQuestion>;
   snippets: SourceSnippet[];
+  warning?: string;
 }): Promise<AskResult> {
   const response = await input.client.evaluate({
     state: {
@@ -116,6 +119,7 @@ async function finishVerdict(input: {
     model: response.model,
     usage: response.usage,
     answers: response.answers,
+    warning: input.warning,
   };
 }
 
@@ -149,6 +153,9 @@ export async function askDocument(
   }
 
   const clipped = clipEvidence(document?.text ?? "", formatSources(snippets));
+  const webNeeded = needsWebEvidence(trimmed, document?.text);
+  const searchWarning =
+    webNeeded && snippets.length === 0 ? SEARCH_MISSED_WARNING : undefined;
   let feedback: string | undefined;
   let lastError: unknown;
 
@@ -201,6 +208,7 @@ export async function askDocument(
         clipped,
         questions: validated.questions,
         snippets,
+        warning: searchWarning,
       });
     } catch (error) {
       if (!retryableFormulationError(error)) throw error;
@@ -234,6 +242,9 @@ export async function askDocument(
         clipped,
         questions: fallback.questions,
         snippets,
+        warning: [MODEL_FALLBACK_WARNING, searchWarning]
+          .filter(Boolean)
+          .join(" "),
       });
     } catch (error) {
       if (!retryableFormulationError(error)) throw error;

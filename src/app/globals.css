@@ -133,6 +133,22 @@ textarea {
   margin-top: 6px;
 }
 
+.setup-warning {
+  background: var(--unsure-fill);
+  border: 1px solid #e2c878;
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.setup-warning p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.setup-warning p + p {
+  margin-top: 8px;
+}
+
 .thread {
   display: flex;
   flex-direction: column;

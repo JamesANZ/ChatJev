@@ -155,6 +155,7 @@ export type AskResult =
       model: string;
       usage: JevUsage;
       answers: Record<string, JevAnswer>;
+      warning?: string;
     }
   | {
       kind: "refusal";

@@ -12,3 +12,4 @@ export * from "./questions";
 export * from "./snippets";
 export * from "./llm";
 export * from "./ask";
+export * from "./setup";
