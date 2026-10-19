@@ -94,6 +94,13 @@ export function ChatApp() {
       <header className="masthead">
         <h1>ChatJev</h1>
         <p>
+          ChatJev lets you chat with Jev like a normal chatbot. An LLM and a web
+          scraper turn your question into something Jev can judge, then turn
+          Jev’s result back into a reply. Because Jev scores the sources instead
+          of writing the answer itself, it typically cannot invent facts the way
+          a normal chatbot does.
+        </p>
+        <p>
           Ask in plain language. If a file does not answer, ChatJev looks the
           question up, gives Jev those sources, and reads the scores back.
         </p>

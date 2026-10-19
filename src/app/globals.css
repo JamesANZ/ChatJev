@@ -66,6 +66,10 @@ textarea {
   line-height: 1.5;
 }
 
+.masthead p + p {
+  margin-top: 10px;
+}
+
 .dropzone {
   border: 1.5px dashed #b7ae96;
   background: rgba(255, 253, 248, 0.7);
