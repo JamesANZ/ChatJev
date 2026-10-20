@@ -1,4 +1,5 @@
 import { askDocument } from "@/core/ask";
+import { normalizeChatHistory } from "@/core/conversation";
 import { ingestDocument } from "@/core/ingest";
 import { createHeuristicLlm, type LlmClient } from "@/core/llm";
 import {
@@ -53,6 +54,7 @@ export async function handleAsk(
     const payload = (await request.json().catch(() => ({}))) as {
       question?: unknown;
       document?: Partial<DocumentContext> | null;
+      history?: unknown;
     };
 
     if (typeof payload.question !== "string") {
@@ -81,7 +83,11 @@ export async function handleAsk(
     const hasText = typeof text === "string" && text.length > 0;
     const hasName = typeof filename === "string" && filename.length > 0;
     const hasImage = Boolean(image);
-    if ((hasText && !hasName) || (hasImage && !hasName) || (!hasText && !hasImage && hasName)) {
+    if (
+      (hasText && !hasName) ||
+      (hasImage && !hasName) ||
+      (!hasText && !hasImage && hasName)
+    ) {
       return json(
         {
           error: "Send both the document text and filename.",
@@ -91,9 +97,7 @@ export async function handleAsk(
       );
     }
 
-    const documentText = hasText
-      ? text
-      : `Attached image: ${filename}.`;
+    const documentText = hasText ? text : `Attached image: ${filename}.`;
     const document: DocumentContext | null =
       hasName && (hasText || hasImage)
         ? {
@@ -109,7 +113,15 @@ export async function handleAsk(
           }
         : null;
 
-    return json(await askDocument(jev, document, payload.question, llm));
+    return json(
+      await askDocument(
+        jev,
+        document,
+        payload.question,
+        llm,
+        normalizeChatHistory(payload.history),
+      ),
+    );
   } catch (error) {
     return errorResponse(error);
   }

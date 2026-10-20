@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import type { DocumentContext } from "@/core/types";
+import type { ChatTurn, DocumentContext } from "@/core/types";
 import { askAttachedDocument, uploadDocument } from "@/lib/client";
 import {
   appendMessage,
@@ -34,6 +34,20 @@ const EMPTY_HISTORY: ChatHistory = { activeId: null, chats: [] };
 
 function nextId(): string {
   return crypto.randomUUID();
+}
+
+function priorTurns(messages: ChatItem[]): ChatTurn[] {
+  const turns: ChatTurn[] = [];
+  for (const message of messages) {
+    if (message.role === "user") {
+      const text = message.text.trim();
+      if (text) turns.push({ role: "user", text });
+      continue;
+    }
+    const text = message.result.message.trim();
+    if (text) turns.push({ role: "assistant", text });
+  }
+  return turns;
 }
 
 function hasFiles(event: DragEvent) {
@@ -146,7 +160,12 @@ export function ChatApp() {
     if (busy) return;
     const chatId = active?.id ?? nextId();
     const attached = document;
-    const userMessage: ChatItem = { id: nextId(), role: "user", text: question };
+    const prior = priorTurns(messages);
+    const userMessage: ChatItem = {
+      id: nextId(),
+      role: "user",
+      text: question,
+    };
     setError(null);
     setHistory((current) => {
       const open =
@@ -163,7 +182,7 @@ export function ChatApp() {
     setPendingChatId(chatId);
     setBusy(true);
     try {
-      const result = await askAttachedDocument(attached, question);
+      const result = await askAttachedDocument(attached, question, prior);
       setAskNotice(result.kind === "verdict" ? (result.warning ?? null) : null);
       setHistory((current) =>
         appendMessage(current, chatId, {
@@ -297,7 +316,9 @@ export function ChatApp() {
                 <div
                   key={chat.id}
                   className={
-                    chat.id === history.activeId ? "chat-row active" : "chat-row"
+                    chat.id === history.activeId
+                      ? "chat-row active"
+                      : "chat-row"
                   }
                 >
                   <button

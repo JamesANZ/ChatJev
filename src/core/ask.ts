@@ -1,3 +1,8 @@
+import {
+  followUpQuestion,
+  formatChatLog,
+  normalizeChatHistory,
+} from "./conversation";
 import { needsWebEvidence } from "./evidence";
 import { examDrafts } from "./exam";
 import { MODEL_FALLBACK_WARNING, SEARCH_MISSED_WARNING } from "./setup";
@@ -19,6 +24,7 @@ import { formatSources } from "./snippets";
 import {
   ChatJevError,
   type AskResult,
+  type ChatTurn,
   type DocumentContext,
   type JevClient,
   type JevQuestion,
@@ -73,6 +79,7 @@ async function finishVerdict(input: {
   snippets: SourceSnippet[];
   imageReading?: string;
   warning?: string;
+  history: ChatTurn[];
 }): Promise<AskResult> {
   const response = await input.client.evaluate({
     state: {
@@ -80,6 +87,7 @@ async function finishVerdict(input: {
       document: input.clipped.document,
       sources: input.clipped.sources,
       user_question: input.trimmed,
+      ...(input.history.length ? { chat: formatChatLog(input.history) } : {}),
     },
     image: input.document?.image
       ? {
@@ -102,6 +110,7 @@ async function finishVerdict(input: {
         question: input.trimmed,
         lines: judgments.map((item) => item.line),
         sources: input.snippets,
+        history: input.history,
       })
     ).trim();
     if (
@@ -136,8 +145,10 @@ export async function askDocument(
   document: DocumentContext | null,
   question: string,
   llm: LlmClient = createHeuristicLlm(),
+  history: ChatTurn[] | unknown = [],
 ): Promise<AskResult> {
   const trimmed = question.trim();
+  const prior = normalizeChatHistory(history);
   if (!trimmed) {
     return {
       kind: "refusal",
@@ -157,6 +168,7 @@ export async function askDocument(
           filename: document.filename,
           question: trimmed,
           image: document.image,
+          history: prior,
         })
       ).trim();
       if (reading) {
@@ -184,6 +196,7 @@ export async function askDocument(
     filename: evidence?.filename,
     document: evidence?.text,
     image: imageAttached,
+    history: prior,
   });
 
   if (!document && snippets.length === 0) {
@@ -217,6 +230,7 @@ export async function askDocument(
         attempt,
         strategy,
         image: imageAttached,
+        history: prior,
       });
     } catch (error) {
       if (!retryableFormulationError(error)) throw error;
@@ -256,6 +270,7 @@ export async function askDocument(
         snippets,
         imageReading,
         warning: askWarning || undefined,
+        history: prior,
       });
     } catch (error) {
       if (!retryableFormulationError(error)) throw error;
@@ -272,7 +287,7 @@ export async function askDocument(
   const fallback = validateQuestions(
     repairDrafts(
       examDrafts({
-        question: trimmed,
+        question: prior.length ? followUpQuestion(trimmed, prior) : trimmed,
         document: clipped.document,
         sourcesText: clipped.sources,
       }),
@@ -291,6 +306,7 @@ export async function askDocument(
         snippets,
         imageReading,
         warning: [MODEL_FALLBACK_WARNING, askWarning].filter(Boolean).join(" "),
+        history: prior,
       });
     } catch (error) {
       if (!retryableFormulationError(error)) throw error;

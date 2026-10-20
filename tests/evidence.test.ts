@@ -44,9 +44,13 @@ describe("needsWebEvidence", () => {
     expect(needsWebEvidence("name James?", document)).toBe(false);
     expect(needsWebEvidence("Is this about flights?", document)).toBe(false);
     expect(
-      needsWebEvidence("Is there a dog in this picture?", "Attached image: a.jpg.", {
-        image: true,
-      }),
+      needsWebEvidence(
+        "Is there a dog in this picture?",
+        "Attached image: a.jpg.",
+        {
+          image: true,
+        },
+      ),
     ).toBe(false);
   });
 });

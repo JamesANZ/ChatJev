@@ -25,8 +25,15 @@ function answerFor(question: JevQuestion): JevAnswer {
   }
   return scoreAnswer(
     1,
-    Object.fromEntries(question.criteria.map((label, index) => [String(index), label])),
-    Object.fromEntries(question.criteria.map((_, index) => [String(index), index === 1 ? 0.8 : 0.1])),
+    Object.fromEntries(
+      question.criteria.map((label, index) => [String(index), label]),
+    ),
+    Object.fromEntries(
+      question.criteria.map((_, index) => [
+        String(index),
+        index === 1 ? 0.8 : 0.1,
+      ]),
+    ),
   );
 }
 
@@ -76,7 +83,9 @@ describe("image attachments", () => {
     expect(pixels).toBeGreaterThanOrEqual(IMAGE_MIN_PIXELS);
     expect(document.image?.height).toBeGreaterThan(document.image?.width ?? 0);
     expect(document.text).toContain("door.jpg");
-    expect(Buffer.from(document.image?.dataBase64 ?? "", "base64")[0]).toBe(0xff);
+    expect(Buffer.from(document.image?.dataBase64 ?? "", "base64")[0]).toBe(
+      0xff,
+    );
 
     const wide = await sharp({
       create: {

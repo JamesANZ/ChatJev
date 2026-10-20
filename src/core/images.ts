@@ -64,10 +64,7 @@ function isHeic(filename: string, mimeType: string): boolean {
   return extension === ".heic" || extension === ".heif";
 }
 
-function imageReadError(
-  filename: string,
-  mimeType: string,
-): ChatJevError {
+function imageReadError(filename: string, mimeType: string): ChatJevError {
   if (isHeic(filename, mimeType)) {
     return new ChatJevError(
       422,

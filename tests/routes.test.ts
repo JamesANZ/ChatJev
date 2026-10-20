@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createDemoJevClient } from "../src/core/jev-client";
 import { ingestDocument } from "../src/core/ingest";
+import type { LlmClient } from "../src/core/llm";
 import { handleAsk, handleUpload } from "../src/lib/http";
 import {
   fixture,
@@ -93,6 +94,63 @@ describe("HTTP routes", () => {
       scriptedJev(judgmentClassification()),
     );
     expect(asked.status).toBe(400);
+  });
+
+  it("passes earlier chat turns through to the next question", async () => {
+    let seen: unknown;
+    const model: LlmClient = {
+      async gather(input) {
+        seen = input.history;
+        return [
+          {
+            title: "Victorian poll",
+            url: "https://example.com/poll",
+            excerpt:
+              "The 2027 Victorian election is contested by Labor and the Coalition.",
+          },
+        ];
+      },
+      async compile() {
+        return [
+          {
+            key: "claim",
+            type: "noul",
+            instructions: "Labor can win the Victoria state election in 2027.",
+          },
+        ];
+      },
+      async narrate() {
+        return "Jev puts that at 40% yes.";
+      },
+    };
+    const asked = await handleAsk(
+      new Request("http://localhost/api/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: "Can Labor win?",
+          history: [
+            {
+              role: "user",
+              text: "Will the coalition win the Victoria state election in 2027?",
+            },
+            { role: "assistant", text: "Jev puts that at 62% yes." },
+            { role: "system", text: "drop me" },
+            { role: "user", text: "   " },
+          ],
+        }),
+      }),
+      createDemoJevClient(),
+      model,
+    );
+    expect(asked.status).toBe(200);
+    expect(seen).toEqual([
+      {
+        role: "user",
+        text: "Will the coalition win the Victoria state election in 2027?",
+      },
+      { role: "assistant", text: "Jev puts that at 62% yes." },
+    ]);
   });
 
   it("rejects unsupported and oversized uploads", async () => {

@@ -10,7 +10,9 @@ import {
 
 export type IngestOptions = {
   extractors?: Record<string, Extractor>;
-  prepareImage?: (input: PrepareImageInput) => Promise<DocumentContext["image"]>;
+  prepareImage?: (
+    input: PrepareImageInput,
+  ) => Promise<DocumentContext["image"]>;
   maxBytes?: number;
   maxChars?: number;
   id?: string;

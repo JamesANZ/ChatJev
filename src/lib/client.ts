@@ -1,4 +1,4 @@
-import type { AskResult, DocumentContext } from "@/core/types";
+import type { AskResult, ChatTurn, DocumentContext } from "@/core/types";
 
 export class AskError extends Error {
   readonly code?: string;
@@ -35,11 +35,12 @@ export async function askAttachedDocument(
     "id" | "filename" | "mimeType" | "text" | "truncated" | "image"
   > | null,
   question: string,
+  history: ChatTurn[] = [],
 ): Promise<AskResult> {
   const response = await fetch("/api/ask", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, document }),
+    body: JSON.stringify({ question, document, history }),
   });
   if (!response.ok) {
     throw await readError(response);

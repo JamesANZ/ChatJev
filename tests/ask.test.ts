@@ -375,4 +375,57 @@ describe("askDocument", () => {
     expect(result.message).toMatch(/74%/);
     expect(result.message.toLowerCase()).toContain("nicotine");
   });
+
+  it("keeps earlier turns with a follow-up in the same chat", async () => {
+    const history = [
+      {
+        role: "user" as const,
+        text: "Will the coalition win the Victoria state election in 2027?",
+      },
+      { role: "assistant" as const, text: "Jev puts that at 62% yes." },
+    ];
+    const client = new FakeJevClient((request) => {
+      const state = request.state as { chat?: string; user_question?: string };
+      expect(state.user_question).toBe("Can Labor win?");
+      expect(state.chat).toContain("Victoria state election in 2027");
+      expect(state.chat).toContain("62% yes");
+      return {
+        model: "jev-test",
+        usage: { input_tokens: 12, output_tokens: 2 },
+        answers: { claim: noulAnswer(0.4) },
+      };
+    });
+    const result = await askDocument(
+      client,
+      null,
+      "Can Labor win?",
+      {
+        async gather(input) {
+          expect(input.history).toEqual(history);
+          expect(input.question).toBe("Can Labor win?");
+          return [SOURCE];
+        },
+        async compile(input) {
+          expect(input.history?.[0]?.text).toContain("coalition");
+          return [
+            {
+              key: "claim",
+              type: "noul",
+              instructions:
+                "Labor can win the Victoria state election in 2027.",
+            },
+          ];
+        },
+        async narrate(input) {
+          expect(input.history).toHaveLength(2);
+          return "Jev puts Labor winning that election at 40% yes.";
+        },
+      },
+      history,
+    );
+    expect(result.kind).toBe("verdict");
+    if (result.kind !== "verdict") return;
+    expect(result.question).toBe("Can Labor win?");
+    expect(result.message).toContain("40%");
+  });
 });

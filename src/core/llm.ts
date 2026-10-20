@@ -1,4 +1,5 @@
 import { compileEvaluation } from "./compile";
+import { followUpQuestion } from "./conversation";
 import { claimProposition, needsWebEvidence, webClaimDrafts } from "./evidence";
 import {
   examDrafts,
@@ -6,13 +7,19 @@ import {
   shouldAnswerAsExam,
   topicProposition,
 } from "./exam";
-import type { AttachedImage, QuestionDraft, SourceSnippet } from "./types";
+import type {
+  AttachedImage,
+  ChatTurn,
+  QuestionDraft,
+  SourceSnippet,
+} from "./types";
 
 export type GatherInput = {
   question: string;
   filename?: string;
   document?: string;
   image?: boolean;
+  history?: ChatTurn[];
 };
 
 export const FORMULATION_ATTEMPTS = 4;
@@ -56,6 +63,7 @@ export type CompileInput = {
   attempt?: number;
   strategy?: FormulationStrategy;
   image?: boolean;
+  history?: ChatTurn[];
 };
 
 function photoInstructions(instructions: string): string {
@@ -80,12 +88,14 @@ export type NarrateInput = {
   question: string;
   lines: string[];
   sources: SourceSnippet[];
+  history?: ChatTurn[];
 };
 
 export type DescribeImageInput = {
   filename: string;
   question: string;
   image: Pick<AttachedImage, "format" | "dataBase64">;
+  history?: ChatTurn[];
 };
 
 export interface LlmClient {
@@ -101,18 +111,24 @@ export function createHeuristicLlm(): LlmClient {
       return [];
     },
     async compile(input) {
+      const asked = input.history?.length
+        ? followUpQuestion(input.question, input.history)
+        : input.question;
       const strategy = input.strategy ?? "match";
       if (strategy === "exam" || strategy === "simple") {
-        return pointAtPhoto(examDrafts(input), input.image);
+        return pointAtPhoto(
+          examDrafts({ ...input, question: asked }),
+          input.image,
+        );
       }
       if (strategy === "proposition") {
-        const instructions = isTopicQuestion(input.question)
-          ? topicProposition(input.question)
-          : needsWebEvidence(input.question, input.document, {
+        const instructions = isTopicQuestion(asked)
+          ? topicProposition(asked)
+          : needsWebEvidence(asked, input.document, {
                 image: input.image,
               })
-            ? claimProposition(input.question)
-            : input.question.trim().slice(0, 400);
+            ? claimProposition(asked)
+            : asked.trim().slice(0, 400);
         return pointAtPhoto(
           [
             {
@@ -124,35 +140,41 @@ export function createHeuristicLlm(): LlmClient {
           input.image,
         );
       }
-      if (isTopicQuestion(input.question)) {
+      if (isTopicQuestion(asked)) {
         return pointAtPhoto(
           [
             {
               key: "claim",
               type: "noul",
-              instructions: topicProposition(input.question),
+              instructions: topicProposition(asked),
             },
           ],
           input.image,
         );
       }
       if (
-        needsWebEvidence(input.question, input.document, {
+        needsWebEvidence(asked, input.document, {
           image: input.image,
         })
       ) {
-        if (shouldAnswerAsExam(input.question)) {
-          return pointAtPhoto(examDrafts(input), input.image);
+        if (shouldAnswerAsExam(asked)) {
+          return pointAtPhoto(
+            examDrafts({ ...input, question: asked }),
+            input.image,
+          );
         }
-        return pointAtPhoto(webClaimDrafts(input.question), input.image);
+        return pointAtPhoto(webClaimDrafts(asked), input.image);
       }
-      if (shouldAnswerAsExam(input.question)) {
-        return pointAtPhoto(examDrafts(input), input.image);
+      if (shouldAnswerAsExam(asked)) {
+        return pointAtPhoto(
+          examDrafts({ ...input, question: asked }),
+          input.image,
+        );
       }
       const request = compileEvaluation(
         input.filename || "evidence",
         input.document,
-        input.question,
+        asked,
       );
       return pointAtPhoto(
         Object.entries(request.questions).map(([key, question]) => ({

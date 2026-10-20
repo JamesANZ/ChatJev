@@ -153,6 +153,11 @@ export type SourceSnippet = {
   excerpt: string;
 };
 
+export type ChatTurn = {
+  role: "user" | "assistant";
+  text: string;
+};
+
 export type QuestionDraft = {
   key: string;
   type: "noul" | "choice" | "score";

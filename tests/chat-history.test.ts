@@ -59,7 +59,9 @@ function chat(
   };
 }
 
-function memoryStorage(maxBytes?: number): HistoryStorage & { raw(): string | null } {
+function memoryStorage(
+  maxBytes?: number,
+): HistoryStorage & { raw(): string | null } {
   let value: string | null = null;
   return {
     getItem(key) {
@@ -200,6 +202,9 @@ describe("chat history", () => {
     const saved = saveHistory({ activeId: "3", chats }, storage);
 
     expect(saved.chats.map((item) => item.id)).toEqual(["3", "2"]);
-    expect(loadHistory(storage).chats.map((item) => item.id)).toEqual(["3", "2"]);
+    expect(loadHistory(storage).chats.map((item) => item.id)).toEqual([
+      "3",
+      "2",
+    ]);
   });
 });

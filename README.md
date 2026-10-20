@@ -10,10 +10,10 @@ The TypeSafe key and the AI Gateway credential stay on the server. The browser u
 
 ## Feasibility
 
-| Layer                                      | Generic?  | What ChatJev does                                                                        |
-| ------------------------------------------ | --------- | ---------------------------------------------------------------------------------------- |
-| Domain (medical, legal, finance, anything) | Yes       | Jev evaluates the supplied text. There are no medical- or legal-specific schemas.        |
-| File type                                  | Partially | Jev reads text and, experimentally, still images. ChatJev extracts text from common documents and prepares PNG, JPEG, WebP, GIF, and HEIC into a JPEG Jev can see. |
+| Layer                                      | Generic?  | What ChatJev does                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------ | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Domain (medical, legal, finance, anything) | Yes       | Jev evaluates the supplied text. There are no medical- or legal-specific schemas.                                                                                                                                                                                                                    |
+| File type                                  | Partially | Jev reads text and, experimentally, still images. ChatJev extracts text from common documents and prepares PNG, JPEG, WebP, GIF, and HEIC into a JPEG Jev can see.                                                                                                                                   |
 | Question type                              | Yes       | Yes/no claims stay direct judgments. Other questions become a multiple-choice exam that Jev scores, then a sentence. A rejected formulation is repaired, then retried in several different shapes. Questions the file does not answer are looked up on the web, and those excerpts are given to Jev. |
 
 Jev’s state budget is about **32,000 tokens**. ChatJev estimates 4 characters per token and **truncates with a visible warning** rather than silently chunking.
@@ -64,9 +64,9 @@ npx vercel --prod
 
 ## API
 
-| Method | Path            | Purpose                                                                      |
-| ------ | --------------- | ---------------------------------------------------------------------------- |
-| `POST` | `/api/sessions` | Multipart upload (`file`). Returns extracted document text for the next ask. |
+| Method | Path            | Purpose                                                                         |
+| ------ | --------------- | ------------------------------------------------------------------------------- |
+| `POST` | `/api/sessions` | Multipart upload (`file`). Returns extracted document text for the next ask.    |
 | `POST` | `/api/ask`      | JSON `{ question, document? }`. Returns judgments plus a reading, or a refusal. |
 
 Document text is held in the browser after extract so Vercel serverless instances do not need shared session memory.

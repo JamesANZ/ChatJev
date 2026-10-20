@@ -146,8 +146,7 @@ function parseHistory(value: unknown): ChatHistory {
         return parsed ? [parsed] : [];
       })
     : [];
-  const activeId =
-    typeof record.activeId === "string" ? record.activeId : null;
+  const activeId = typeof record.activeId === "string" ? record.activeId : null;
   return { activeId, chats };
 }
 
@@ -212,7 +211,10 @@ function isChatItem(value: unknown): value is ChatItem {
     judgments?: unknown;
     sources?: unknown;
   };
-  if (typeof answer.question !== "string" || typeof answer.message !== "string") {
+  if (
+    typeof answer.question !== "string" ||
+    typeof answer.message !== "string"
+  ) {
     return false;
   }
   if (answer.kind === "refusal") return true;
