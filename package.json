@@ -16,13 +16,14 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.96",
-    "@typesafe-ai/sdk": "^0.6.0",
+    "@typesafe-ai/sdk": "^0.7.0",
     "ai": "^7.0.143",
     "mammoth": "^1.9.1",
     "next": "^15.5.4",
     "pdf-parse": "^1.1.1",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@types/node": "^22.18.1",

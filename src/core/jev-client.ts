@@ -208,6 +208,7 @@ export function createDemoJevClient(): JevClient {
       user_question?: string;
       document?: string;
       sources?: string;
+      filename?: string;
     };
     const question = state.user_question ?? "";
     const openEnded = /\b(summarize|explain|rewrite|what does it say)\b/i.test(
@@ -241,8 +242,11 @@ export function createDemoJevClient(): JevClient {
       );
     }
 
-    const haystack =
-      `${state.document ?? ""} ${state.sources ?? ""}`.toLowerCase();
+    const haystack = (
+      request.image
+        ? `${state.filename ?? ""} ${question}`
+        : `${state.document ?? ""} ${state.sources ?? ""}`
+    ).toLowerCase();
     const noul = overlap(question || "claim", haystack);
     const answers: Record<string, JevAnswer> = {};
     for (const [key, item] of Object.entries(request.questions)) {

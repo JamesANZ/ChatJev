@@ -65,6 +65,10 @@ export function ChatApp() {
   const [askNotice, setAskNotice] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [composerSeed, setComposerSeed] = useState<{
+    id: number;
+    text: string;
+  } | null>(null);
   const desktop = useDesktopLayout();
   const stageRef = useRef<HTMLDivElement>(null);
 
@@ -409,7 +413,9 @@ export function ChatApp() {
                     type="button"
                     className="suggestion"
                     disabled={busy}
-                    onClick={() => onSend(prompt)}
+                    onClick={() =>
+                      setComposerSeed({ id: Date.now(), text: prompt })
+                    }
                   >
                     {prompt}
                   </button>
@@ -431,8 +437,13 @@ export function ChatApp() {
             {error ? <p className="dock-error">{error}</p> : null}
             <MessageInput
               disabled={busy}
+              seed={composerSeed}
               placeholder={
-                document ? "Ask about this document" : "Message ChatJev"
+                document?.image
+                  ? "Ask about this image"
+                  : document
+                    ? "Ask about this document"
+                    : "Message ChatJev"
               }
               attachment={
                 document ? (

@@ -101,7 +101,9 @@ describe("HTTP routes", () => {
       Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
       "image/png",
     );
-    expect(png.status).toBe(415);
+    expect(png.status).toBe(422);
+    const body = (await png.json()) as { code?: string };
+    expect(body.code).toBe("invalid_image");
 
     const huge = await ingestDocument(
       {

@@ -71,6 +71,7 @@ async function finishVerdict(input: {
   clipped: { document: string; sources: string; truncated: boolean };
   questions: Record<string, JevQuestion>;
   snippets: SourceSnippet[];
+  imageReading?: string;
   warning?: string;
 }): Promise<AskResult> {
   const response = await input.client.evaluate({
@@ -80,6 +81,12 @@ async function finishVerdict(input: {
       sources: input.clipped.sources,
       user_question: input.trimmed,
     },
+    image: input.document?.image
+      ? {
+          format: input.document.image.format,
+          dataBase64: input.document.image.dataBase64,
+        }
+      : undefined,
     questions: input.questions,
   });
 
@@ -114,6 +121,7 @@ async function finishVerdict(input: {
     narration,
     judgments,
     sources: input.snippets,
+    imageReading: input.imageReading,
     evidenceTruncated:
       Boolean(input.document?.truncated) || input.clipped.truncated,
     model: response.model,
@@ -138,10 +146,44 @@ export async function askDocument(
     };
   }
 
+  const imageAttached = Boolean(document?.image);
+  let evidence = document;
+  let imageReading: string | undefined;
+  let visionWarning: string | undefined;
+  if (document?.image && llm.describeImage) {
+    try {
+      const reading = (
+        await llm.describeImage({
+          filename: document.filename,
+          question: trimmed,
+          image: document.image,
+        })
+      ).trim();
+      if (reading) {
+        imageReading = reading;
+        evidence = {
+          ...document,
+          text: `Vision-model reading of ${document.filename}. This description is not the picture. The picture is \`photo\`.\n\n${reading}`,
+        };
+      }
+    } catch (error) {
+      if (
+        error instanceof ChatJevError &&
+        (error.code === "missing_llm_key" ||
+          error.status === 401 ||
+          error.status === 403)
+      ) {
+        throw error;
+      }
+      visionWarning =
+        "The vision model could not read this image, so the questions were written without a description of it. Jev still received the picture.";
+    }
+  }
   const snippets = await llm.gather({
     question: trimmed,
-    filename: document?.filename,
-    document: document?.text,
+    filename: evidence?.filename,
+    document: evidence?.text,
+    image: imageAttached,
   });
 
   if (!document && snippets.length === 0) {
@@ -152,10 +194,13 @@ export async function askDocument(
     );
   }
 
-  const clipped = clipEvidence(document?.text ?? "", formatSources(snippets));
-  const webNeeded = needsWebEvidence(trimmed, document?.text);
+  const clipped = clipEvidence(evidence?.text ?? "", formatSources(snippets));
+  const webNeeded = needsWebEvidence(trimmed, evidence?.text, {
+    image: imageAttached,
+  });
   const searchWarning =
     webNeeded && snippets.length === 0 ? SEARCH_MISSED_WARNING : undefined;
+  const askWarning = [visionWarning, searchWarning].filter(Boolean).join(" ");
   let feedback: string | undefined;
   let lastError: unknown;
 
@@ -165,12 +210,13 @@ export async function askDocument(
     try {
       drafts = await llm.compile({
         question: trimmed,
-        filename: document?.filename ?? "",
+        filename: evidence?.filename ?? "",
         document: clipped.document,
         sourcesText: clipped.sources,
         feedback,
         attempt,
         strategy,
+        image: imageAttached,
       });
     } catch (error) {
       if (!retryableFormulationError(error)) throw error;
@@ -203,12 +249,13 @@ export async function askDocument(
       return await finishVerdict({
         client,
         llm,
-        document,
+        document: evidence,
         trimmed,
         clipped,
         questions: validated.questions,
         snippets,
-        warning: searchWarning,
+        imageReading,
+        warning: askWarning || undefined,
       });
     } catch (error) {
       if (!retryableFormulationError(error)) throw error;
@@ -237,14 +284,13 @@ export async function askDocument(
       return await finishVerdict({
         client,
         llm,
-        document,
+        document: evidence,
         trimmed,
         clipped,
         questions: fallback.questions,
         snippets,
-        warning: [MODEL_FALLBACK_WARNING, searchWarning]
-          .filter(Boolean)
-          .join(" "),
+        imageReading,
+        warning: [MODEL_FALLBACK_WARNING, askWarning].filter(Boolean).join(" "),
       });
     } catch (error) {
       if (!retryableFormulationError(error)) throw error;

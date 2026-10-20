@@ -6,6 +6,34 @@ export const JUDGMENT_NOUL_THRESHOLD = 0.6;
 export const UNSURE_LOW = 0.4;
 export const UNSURE_HIGH = 0.6;
 
+export type AttachedImage = {
+  format: "png" | "jpg";
+  dataBase64: string;
+  width: number;
+  height: number;
+};
+
+export function parseAttachedImage(value: unknown): AttachedImage | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const image = value as Partial<AttachedImage>;
+  if (image.format !== "jpg" && image.format !== "png") return undefined;
+  if (typeof image.dataBase64 !== "string" || image.dataBase64.length === 0) {
+    return undefined;
+  }
+  if (typeof image.width !== "number" || typeof image.height !== "number") {
+    return undefined;
+  }
+  if (!Number.isFinite(image.width) || !Number.isFinite(image.height)) {
+    return undefined;
+  }
+  return {
+    format: image.format,
+    dataBase64: image.dataBase64,
+    width: image.width,
+    height: image.height,
+  };
+}
+
 export type DocumentContext = {
   id: string;
   filename: string;
@@ -13,6 +41,7 @@ export type DocumentContext = {
   text: string;
   charCount: number;
   truncated: boolean;
+  image?: AttachedImage;
 };
 
 export type SessionSummary = {
@@ -21,6 +50,7 @@ export type SessionSummary = {
   mimeType: string;
   charCount: number;
   truncated: boolean;
+  image?: AttachedImage;
 };
 
 export type Relation = "supported" | "contradicted" | "not_mentioned";
@@ -77,6 +107,7 @@ export type JevQuestion = NoulQuestion | ChoiceQuestion | ScoreQuestion;
 export type JevRequest = {
   state: unknown;
   questions: Record<string, JevQuestion>;
+  image?: Pick<AttachedImage, "format" | "dataBase64">;
 };
 
 export type JevResponse = {
@@ -151,6 +182,7 @@ export type AskResult =
       narration: string | null;
       judgments: JudgmentView[];
       sources: SourceSnippet[];
+      imageReading?: string;
       evidenceTruncated: boolean;
       model: string;
       usage: JevUsage;

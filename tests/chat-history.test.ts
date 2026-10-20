@@ -111,6 +111,31 @@ describe("chat history", () => {
     expect(loadHistory(storage)).toEqual(saveHistory(history, storage));
   });
 
+  it("keeps an attached image on the open chat", () => {
+    const storage = memoryStorage();
+    const photo: DocumentContext = {
+      ...document,
+      filename: "door.jpg",
+      mimeType: "image/jpeg",
+      text: "Attached image: door.jpg (280×280).",
+      image: {
+        format: "jpg",
+        dataBase64: "abc",
+        width: 280,
+        height: 280,
+      },
+    };
+    const history: ChatHistory = {
+      activeId: "one",
+      chats: [chat("one", "Is there a person?", 2, { document: photo })],
+    };
+
+    expect(saveHistory(history, storage).chats[0]?.document?.image).toEqual(
+      photo.image,
+    );
+    expect(loadHistory(storage).chats[0]?.document).toEqual(photo);
+  });
+
   it("titles a chat from the first user message", () => {
     const storage = memoryStorage();
     const saved = saveHistory(

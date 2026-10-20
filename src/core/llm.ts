@@ -6,12 +6,13 @@ import {
   shouldAnswerAsExam,
   topicProposition,
 } from "./exam";
-import type { QuestionDraft, SourceSnippet } from "./types";
+import type { AttachedImage, QuestionDraft, SourceSnippet } from "./types";
 
 export type GatherInput = {
   question: string;
   filename?: string;
   document?: string;
+  image?: boolean;
 };
 
 export const FORMULATION_ATTEMPTS = 4;
@@ -54,7 +55,26 @@ export type CompileInput = {
   feedback?: string;
   attempt?: number;
   strategy?: FormulationStrategy;
+  image?: boolean;
 };
+
+function photoInstructions(instructions: string): string {
+  if (instructions.includes("`photo`")) return instructions.slice(0, 400);
+  const suffix = " Judge the image in `photo`.";
+  const base = instructions.slice(0, 400 - suffix.length).trimEnd();
+  return `${base}${suffix}`;
+}
+
+function pointAtPhoto(
+  drafts: QuestionDraft[],
+  image?: boolean,
+): QuestionDraft[] {
+  if (!image) return drafts;
+  return drafts.map((draft) => ({
+    ...draft,
+    instructions: photoInstructions(draft.instructions),
+  }));
+}
 
 export type NarrateInput = {
   question: string;
@@ -62,10 +82,17 @@ export type NarrateInput = {
   sources: SourceSnippet[];
 };
 
+export type DescribeImageInput = {
+  filename: string;
+  question: string;
+  image: Pick<AttachedImage, "format" | "dataBase64">;
+};
+
 export interface LlmClient {
   gather(input: GatherInput): Promise<SourceSnippet[]>;
   compile(input: CompileInput): Promise<QuestionDraft[]>;
   narrate(input: NarrateInput): Promise<string>;
+  describeImage?(input: DescribeImageInput): Promise<string>;
 }
 
 export function createHeuristicLlm(): LlmClient {
@@ -75,50 +102,73 @@ export function createHeuristicLlm(): LlmClient {
     },
     async compile(input) {
       const strategy = input.strategy ?? "match";
-      if (strategy === "exam" || strategy === "simple")
-        return examDrafts(input);
+      if (strategy === "exam" || strategy === "simple") {
+        return pointAtPhoto(examDrafts(input), input.image);
+      }
       if (strategy === "proposition") {
         const instructions = isTopicQuestion(input.question)
           ? topicProposition(input.question)
-          : needsWebEvidence(input.question, input.document)
+          : needsWebEvidence(input.question, input.document, {
+                image: input.image,
+              })
             ? claimProposition(input.question)
             : input.question.trim().slice(0, 400);
-        return [
-          {
-            key: "claim",
-            type: "noul",
-            instructions,
-          },
-        ];
+        return pointAtPhoto(
+          [
+            {
+              key: "claim",
+              type: "noul",
+              instructions,
+            },
+          ],
+          input.image,
+        );
       }
       if (isTopicQuestion(input.question)) {
-        return [
-          {
-            key: "claim",
-            type: "noul",
-            instructions: topicProposition(input.question),
-          },
-        ];
+        return pointAtPhoto(
+          [
+            {
+              key: "claim",
+              type: "noul",
+              instructions: topicProposition(input.question),
+            },
+          ],
+          input.image,
+        );
       }
-      if (needsWebEvidence(input.question, input.document)) {
-        if (shouldAnswerAsExam(input.question)) return examDrafts(input);
-        return webClaimDrafts(input.question);
+      if (
+        needsWebEvidence(input.question, input.document, {
+          image: input.image,
+        })
+      ) {
+        if (shouldAnswerAsExam(input.question)) {
+          return pointAtPhoto(examDrafts(input), input.image);
+        }
+        return pointAtPhoto(webClaimDrafts(input.question), input.image);
       }
-      if (shouldAnswerAsExam(input.question)) return examDrafts(input);
+      if (shouldAnswerAsExam(input.question)) {
+        return pointAtPhoto(examDrafts(input), input.image);
+      }
       const request = compileEvaluation(
         input.filename || "evidence",
         input.document,
         input.question,
       );
-      return Object.entries(request.questions).map(([key, question]) => ({
-        key,
-        type: question.type,
-        instructions: question.instructions,
-        criteria: "criteria" in question ? question.criteria : undefined,
-      }));
+      return pointAtPhoto(
+        Object.entries(request.questions).map(([key, question]) => ({
+          key,
+          type: question.type,
+          instructions: question.instructions,
+          criteria: "criteria" in question ? question.criteria : undefined,
+        })),
+        input.image,
+      );
     },
     async narrate(input) {
       return input.lines.join(" ");
+    },
+    async describeImage() {
+      return "";
     },
   };
 }

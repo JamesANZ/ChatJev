@@ -5,6 +5,7 @@ import {
   getExtractor,
   resolveMimeType,
 } from "../src/core/extractors";
+import { isImageUpload } from "../src/core/images";
 import { ChatJevError } from "../src/core/types";
 import { fixture } from "./helpers";
 
@@ -80,11 +81,16 @@ describe("extractors", () => {
     expect(docx.text).toBe("DOCX body text");
   });
 
-  it("rejects images and unknown binaries", () => {
-    const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-    expect(() => getExtractor("scan.png", "image/png")).toThrow(ChatJevError);
-    expect(() => getExtractor("scan.png", "image/png")).toThrow(/cannot read/i);
+  it("rejects unknown binaries and recognizes images separately", () => {
+    expect(() => getExtractor("blob.bin", "application/octet-stream")).toThrow(
+      ChatJevError,
+    );
+    expect(() => getExtractor("blob.bin", "application/octet-stream")).toThrow(
+      /cannot read/i,
+    );
     expect(resolveMimeType("scan.png", "image/png")).toBe("image/png");
-    expect(png[0]).toBe(137);
+    expect(isImageUpload("scan.png", "image/png")).toBe(true);
+    expect(isImageUpload("photo.heic", "")).toBe(true);
+    expect(isImageUpload("notes.txt", "text/plain")).toBe(false);
   });
 });

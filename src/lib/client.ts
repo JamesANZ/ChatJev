@@ -32,7 +32,7 @@ export async function uploadDocument(file: File): Promise<DocumentContext> {
 export async function askAttachedDocument(
   document: Pick<
     DocumentContext,
-    "id" | "filename" | "mimeType" | "text" | "truncated"
+    "id" | "filename" | "mimeType" | "text" | "truncated" | "image"
   > | null,
   question: string,
 ): Promise<AskResult> {

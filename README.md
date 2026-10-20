@@ -2,7 +2,7 @@
 
 Ask [Jev](https://learnjev.com/reference) to judge a document or a web lookup, then read the scores in plain language.
 
-Jev is not a chat model. It takes text as `state` and returns typed judgments (`noul`, `choice`, `score`). A fast language model turns the user’s question into those judgments, can attach web excerpts as evidence, and then restates only Jev’s numbers. The verdict card still shows each judgment, so the paragraph can be checked.
+Jev is not a chat model. It takes text, and experimentally an image, as `state` and returns typed judgments (`noul`, `choice`, `score`). A fast language model turns the user’s question into those judgments, can attach web excerpts as evidence, and then restates only Jev’s numbers. The verdict card still shows each judgment, so the paragraph can be checked.
 
 The TypeSafe key and the AI Gateway credential stay on the server. The browser uploads a file and asks questions.
 
@@ -13,7 +13,7 @@ The TypeSafe key and the AI Gateway credential stay on the server. The browser u
 | Layer                                      | Generic?  | What ChatJev does                                                                        |
 | ------------------------------------------ | --------- | ---------------------------------------------------------------------------------------- |
 | Domain (medical, legal, finance, anything) | Yes       | Jev evaluates the supplied text. There are no medical- or legal-specific schemas.        |
-| File type                                  | Partially | Jev is text-only. ChatJev extracts text from common document types and rejects the rest. |
+| File type                                  | Partially | Jev reads text and, experimentally, still images. ChatJev extracts text from common documents and prepares PNG, JPEG, WebP, GIF, and HEIC into a JPEG Jev can see. |
 | Question type                              | Yes       | Yes/no claims stay direct judgments. Other questions become a multiple-choice exam that Jev scores, then a sentence. A rejected formulation is repaired, then retried in several different shapes. Questions the file does not answer are looked up on the web, and those excerpts are given to Jev. |
 
 Jev’s state budget is about **32,000 tokens**. ChatJev estimates 4 characters per token and **truncates with a visible warning** rather than silently chunking.
@@ -22,8 +22,11 @@ Jev’s state budget is about **32,000 tokens**. ChatJev estimates 4 characters 
 
 - Text: `.txt`, `.md`, `.csv`, `.json`, `.html`
 - Documents: `.pdf`, `.docx`
+- Images: `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.heic`, `.heif`
 
-Not supported in v1: images, scanned PDFs (no OCR), audio, video, and unknown binaries.
+ChatJev rotates and resizes an image, then sends it to Jev as `state.photo` with the `TypeSafe-Danger-Zone-Images: true` header. A vision model first writes a literal reading of what is visible. Jev scores the picture against that reading; the reading is not the answer. Image support on Jev is experimental. Mock mode (`CHATJEV_MOCK_JEV=1`) does not inspect the picture.
+
+Not supported: scanned PDFs (no OCR), audio, video, and unknown binaries.
 
 ## Local setup
 

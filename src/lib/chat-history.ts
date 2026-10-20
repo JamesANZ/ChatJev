@@ -1,5 +1,5 @@
 import type { ChatItem } from "@/components/ChatThread";
-import type { DocumentContext } from "@/core/types";
+import { parseAttachedImage, type DocumentContext } from "@/core/types";
 
 export const HISTORY_KEY = "chatjev.history";
 export const MAX_CHATS = 40;
@@ -183,6 +183,7 @@ function parseDocument(value: unknown): DocumentContext | null {
   ) {
     return null;
   }
+  const image = parseAttachedImage(document.image);
   return {
     id: document.id,
     filename: document.filename,
@@ -190,6 +191,7 @@ function parseDocument(value: unknown): DocumentContext | null {
     text: document.text,
     charCount: document.charCount,
     truncated: document.truncated,
+    ...(image ? { image } : {}),
   };
 }
 

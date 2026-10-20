@@ -1,9 +1,11 @@
 import {
   choice,
+  Image,
   noul,
   score,
   TypeSafeClient,
   TypeSafeError,
+  type ContentValue,
 } from "@typesafe-ai/sdk";
 import {
   ChatJevError,
@@ -52,15 +54,29 @@ export class TypeSafeJevClient implements JevClient {
         apiKey: this.apiKey,
         defaultModel: this.model,
       });
-      const response = await client.systemOne({
-        state: request.state as { [key: string]: string },
-        model: this.model,
-        questions: toSdkQuestions(request.questions),
-      });
+      const state: { [key: string]: ContentValue } = {
+        ...(request.state as { [key: string]: ContentValue }),
+      };
+      if (request.image) {
+        state.photo = Image.fromBase64(request.image.dataBase64);
+      }
+      const response = await client.systemOne(
+        {
+          state,
+          model: this.model,
+          questions: toSdkQuestions(request.questions),
+        },
+        request.image
+          ? { headers: { "TypeSafe-Danger-Zone-Images": "true" } }
+          : undefined,
+      );
       return {
         model: response.model,
         answers: response.answers as JevResponse["answers"],
-        usage: response.usage,
+        usage: {
+          input_tokens: response.usage.input_tokens ?? 0,
+          output_tokens: response.usage.output_tokens ?? 0,
+        },
       };
     } catch (error) {
       if (error instanceof ChatJevError) throw error;

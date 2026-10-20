@@ -9,20 +9,28 @@ import {
   type ReactNode,
 } from "react";
 
+type ComposerSeed = {
+  id: number;
+  text: string;
+};
+
 type MessageInputProps = {
   disabled?: boolean;
   placeholder?: string;
   attachment?: ReactNode;
+  seed?: ComposerSeed | null;
   onSend: (question: string) => void;
   onFile: (file: File) => void;
 };
 
-const ACCEPT = ".txt,.md,.markdown,.csv,.json,.html,.htm,.pdf,.docx";
+const ACCEPT =
+  ".txt,.md,.markdown,.csv,.json,.html,.htm,.pdf,.docx,.png,.jpg,.jpeg,.webp,.gif,.heic,.heif";
 
 export function MessageInput({
   disabled,
   placeholder = "Message ChatJev",
   attachment,
+  seed,
   onSend,
   onFile,
 }: MessageInputProps) {
@@ -31,11 +39,20 @@ export function MessageInput({
   const fileInput = useRef<HTMLInputElement>(null);
 
   useLayoutEffect(() => {
+    if (!seed) return;
+    setValue(seed.text);
+  }, [seed]);
+
+  useLayoutEffect(() => {
     const element = field.current;
     if (!element) return;
     element.style.height = "0px";
     element.style.height = `${Math.min(element.scrollHeight, 200)}px`;
-  }, [value]);
+    if (!seed || element.value !== seed.text) return;
+    element.focus();
+    const end = seed.text.length;
+    element.setSelectionRange(end, end);
+  }, [value, seed]);
 
   function submit() {
     const question = value.trim();
@@ -67,7 +84,7 @@ export function MessageInput({
         <button
           type="button"
           className="icon-btn"
-          aria-label="Attach a document"
+          aria-label="Attach a document or image"
           disabled={disabled}
           onClick={() => fileInput.current?.click()}
         >

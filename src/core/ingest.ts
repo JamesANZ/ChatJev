@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { extractText, type Extractor, type ExtractorInput } from "./extractors";
+import { isImageUpload, prepareImage, type PrepareImageInput } from "./images";
 import {
   ChatJevError,
   MAX_STATE_CHARS,
@@ -9,6 +10,7 @@ import {
 
 export type IngestOptions = {
   extractors?: Record<string, Extractor>;
+  prepareImage?: (input: PrepareImageInput) => Promise<DocumentContext["image"]>;
   maxBytes?: number;
   maxChars?: number;
   id?: string;
@@ -38,6 +40,27 @@ export async function ingestDocument(
       "file_too_large",
       `File exceeds the ${Math.round(maxBytes / (1024 * 1024))} MB upload limit.`,
     );
+  }
+
+  if (isImageUpload(input.filename, input.mimeType)) {
+    const image = await (options.prepareImage ?? prepareImage)(input);
+    if (!image) {
+      throw new ChatJevError(
+        422,
+        "invalid_image",
+        `ChatJev could not read ${input.filename || "this image"}.`,
+      );
+    }
+    const text = `Attached image: ${input.filename} (${image.width}×${image.height}).`;
+    return {
+      id: options.id ?? randomUUID(),
+      filename: input.filename,
+      mimeType: "image/jpeg",
+      text,
+      charCount: text.length,
+      truncated: false,
+      image,
+    };
   }
 
   const { text, mimeType } = await extractText(input, options.extractors);

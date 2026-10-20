@@ -61,6 +61,16 @@ export function VerdictCard({ result }: VerdictCardProps) {
               ))}
             </ul>
           ) : null}
+          {result.imageReading ? (
+            <div className="image-reading">
+              <span className="sources-label">Vision model reading</span>
+              <p>{result.imageReading}</p>
+              <p className="warning">
+                Jev scored the picture against this reading. The reading is not
+                Jev’s answer.
+              </p>
+            </div>
+          ) : null}
           {result.sources.length > 0 ? (
             <div className="sources">
               <span className="sources-label">Sources Jev saw</span>

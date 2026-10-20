@@ -3,6 +3,7 @@ import { ingestDocument } from "@/core/ingest";
 import { createHeuristicLlm, type LlmClient } from "@/core/llm";
 import {
   ChatJevError,
+  parseAttachedImage,
   type DocumentContext,
   type JevClient,
 } from "@/core/types";
@@ -66,9 +67,21 @@ export async function handleAsk(
 
     const text = payload.document?.text;
     const filename = payload.document?.filename;
+    const rawImage = payload.document?.image;
+    const image = rawImage == null ? undefined : parseAttachedImage(rawImage);
+    if (rawImage != null && !image) {
+      return json(
+        {
+          error: "Send a prepared JPEG or PNG with the document.",
+          code: "invalid_document",
+        },
+        400,
+      );
+    }
     const hasText = typeof text === "string" && text.length > 0;
     const hasName = typeof filename === "string" && filename.length > 0;
-    if ((hasText && !hasName) || (!hasText && hasName)) {
+    const hasImage = Boolean(image);
+    if ((hasText && !hasName) || (hasImage && !hasName) || (!hasText && !hasImage && hasName)) {
       return json(
         {
           error: "Send both the document text and filename.",
@@ -78,15 +91,21 @@ export async function handleAsk(
       );
     }
 
+    const documentText = hasText
+      ? text
+      : `Attached image: ${filename}.`;
     const document: DocumentContext | null =
-      hasText && hasName
+      hasName && (hasText || hasImage)
         ? {
             id: payload.document?.id ?? "client",
             filename,
-            mimeType: payload.document?.mimeType ?? "text/plain",
-            text,
-            charCount: text.length,
+            mimeType:
+              payload.document?.mimeType ??
+              (hasImage ? "image/jpeg" : "text/plain"),
+            text: documentText,
+            charCount: documentText.length,
             truncated: Boolean(payload.document?.truncated),
+            image,
           }
         : null;
 

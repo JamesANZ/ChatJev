@@ -78,7 +78,12 @@ export function documentCovers(question: string, document: string): boolean {
   return hits / tokens.length >= 0.6;
 }
 
-export function needsWebEvidence(question: string, document?: string): boolean {
+export function needsWebEvidence(
+  question: string,
+  document?: string,
+  options?: { image?: boolean },
+): boolean {
+  if (options?.image) return false;
   if (!document?.trim()) return true;
   if (asksAboutAttachment(question)) return false;
   return !documentCovers(question, document);
