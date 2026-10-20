@@ -36,10 +36,9 @@ describe("readSetup", () => {
     ).toEqual([]);
   });
 
-  it("says when mock mode is skipping the model", () => {
-    expect(readSetup({ CHATJEV_MOCK_JEV: "1" }).issues[0]?.code).toBe(
-      "mock_mode",
-    );
+  it("stays quiet in mock mode", () => {
+    expect(readSetup({ CHATJEV_MOCK_JEV: "1" }).issues).toEqual([]);
+    expect(readSetup({ CHATJEV_MOCK_LLM: "1" }).issues).toEqual([]);
   });
 });
 

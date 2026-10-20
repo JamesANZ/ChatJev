@@ -1,5 +1,5 @@
 export type SetupIssue = {
-  code: "missing_jev" | "missing_llm" | "missing_search" | "mock_mode";
+  code: "missing_jev" | "missing_llm" | "missing_search";
   message: string;
 };
 
@@ -26,17 +26,7 @@ export function readSetup(env: SetupEnv = process.env): {
   issues: SetupIssue[];
 } {
   const mock = env.CHATJEV_MOCK_JEV === "1" || env.CHATJEV_MOCK_LLM === "1";
-  if (mock) {
-    return {
-      issues: [
-        {
-          code: "mock_mode",
-          message:
-            "ChatJev is in mock mode (CHATJEV_MOCK_JEV or CHATJEV_MOCK_LLM). It is not calling a language model or live web search, so answers are local guesses.",
-        },
-      ],
-    };
-  }
+  if (mock) return { issues: [] };
 
   const issues: SetupIssue[] = [];
   if (!env.TYPESAFE_API_KEY) {

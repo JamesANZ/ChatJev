@@ -1,4 +1,4 @@
-import { gateway, jsonSchema, tool } from "ai";
+import { jsonSchema, tool } from "ai";
 import { createOpenAI, openai } from "@ai-sdk/openai";
 import { ChatJevError } from "./types";
 import { createModelLlm, DEFAULT_LLM_MODEL } from "./gateway-llm";
@@ -65,7 +65,6 @@ export function createDeepSeekLlm() {
   });
   return createModelLlm({
     model: deepseek.chat(modelId),
-    visionModel: gateway(DEFAULT_LLM_MODEL),
     searchTool: tinyFishSearchTool(),
     lookup: lookupWeb,
   });
