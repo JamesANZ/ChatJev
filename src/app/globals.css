@@ -334,12 +334,41 @@ button {
   line-height: 1.45;
 }
 
+.gap-example {
+  margin: 28px auto 0;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--bg-muted);
+  text-align: left;
+}
+
+.gap-example figcaption {
+  margin: 0 0 12px;
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.gap-example ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gap-example .answer-row {
+  color: var(--ink);
+}
+
 .suggestions {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 10px;
-  margin-top: 36px;
+  margin-top: 28px;
 }
 
 .suggestion {
@@ -489,10 +518,45 @@ button {
   gap: 6px;
 }
 
-.judgments li {
+.judgments li,
+.answer-row {
   color: var(--ink-soft);
   font-size: 0.92rem;
   line-height: 1.45;
+}
+
+.answer-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 14px;
+}
+
+.judgment-line {
+  flex: 1 1 16rem;
+}
+
+.origin {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.origin-kind {
+  color: var(--ink-faint);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.origin .source-link {
+  max-width: min(100%, 16rem);
+}
+
+.origin-file {
+  cursor: default;
 }
 
 .image-reading {

@@ -1,6 +1,11 @@
 "use client";
 
-import type { AskResult, JudgmentView, Leaning } from "@/core/types";
+import type {
+  AnswerOrigin,
+  AskResult,
+  JudgmentView,
+  Leaning,
+} from "@/core/types";
 
 type VerdictCardProps = {
   result: AskResult;
@@ -15,6 +20,28 @@ const LEANING_LABEL: Record<Leaning, string> = {
   no: "No",
   unsure: "Unsure",
 };
+
+export function AnswerSource({ origin }: { origin: AnswerOrigin }) {
+  return (
+    <span className="origin">
+      <span className="origin-kind">
+        {origin.kind === "file" ? "from your file" : "found on the web"}
+      </span>
+      {origin.kind === "web" ? (
+        <a
+          className="source-link"
+          href={origin.url}
+          target="_blank"
+          rel="noreferrer"
+        >
+          {origin.title}
+        </a>
+      ) : (
+        <span className="source-link origin-file">{origin.title}</span>
+      )}
+    </span>
+  );
+}
 
 export function VerdictCard({ result }: VerdictCardProps) {
   if (result.kind === "refusal") {
@@ -57,7 +84,10 @@ export function VerdictCard({ result }: VerdictCardProps) {
           {result.judgments.length > 0 ? (
             <ul className="judgments">
               {result.judgments.map((item) => (
-                <li key={item.key}>{item.line}</li>
+                <li className="answer-row" key={item.key}>
+                  <span className="judgment-line">{item.line}</span>
+                  {item.origin ? <AnswerSource origin={item.origin} /> : null}
+                </li>
               ))}
             </ul>
           ) : null}

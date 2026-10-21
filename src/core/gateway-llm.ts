@@ -1,6 +1,6 @@
 import { gateway, generateText, isStepCount, type Tool } from "ai";
 import { conversationPrompt, searchQuery } from "./conversation";
-import { needsWebEvidence } from "./evidence";
+import { missingSubjects, needsWebEvidence } from "./evidence";
 import { lookupWeb } from "./tinyfish";
 import { ChatJevError, type QuestionDraft, type SourceSnippet } from "./types";
 import { extractSnippets } from "./snippets";
@@ -90,6 +90,9 @@ export function createModelLlm(options: {
       if (!search) return [];
 
       const preview = (input.document ?? "").slice(0, 8_000);
+      const gaps = input.document
+        ? missingSubjects(input.question, input.document)
+        : [];
       const prompt = [
         input.filename ? `Filename: ${input.filename}` : "No file is attached.",
         preview
@@ -97,6 +100,9 @@ export function createModelLlm(options: {
           : "No document text is attached. Search the web.",
         input.document && input.document.length > preview.length
           ? "The preview is only the start of a longer document."
+          : "",
+        gaps.length
+          ? `The file does not answer: ${gaps.join(", ")}. Search for those missing answers.`
           : "",
         conversationPrompt(input.history ?? []),
         `User question:\n${input.question}`,
@@ -178,6 +184,7 @@ export function createModelLlm(options: {
             'When web sources are present, judge the user\'s claim from those sources. Write the proposition as a statement the sources can support or contradict, such as "Nicotine is a carcinogen."',
             "Do not rewrite a general question into whether the attached file says it, unless the user asked about the file.",
             "If the user asks for a summary, explanation, extraction, or any answer that is not a yes/no claim, return one choice question.",
+            "When the attached file states some of the requested answers and web sources state one the file does not, return one noul per answer instead of a single choice. Copy each statement from the file or the web source.",
             "When web sources are present, take the choice labels from those sources.",
             'That choice uses 3 to 5 mutually exclusive answer sentences as labels, including key "abstain" for when the evidence does not contain enough information.',
             "Do not mark which label is correct.",

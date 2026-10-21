@@ -165,6 +165,10 @@ export type QuestionDraft = {
   criteria?: unknown;
 };
 
+export type AnswerOrigin =
+  | { kind: "file"; title: string }
+  | { kind: "web"; title: string; url: string };
+
 export type JudgmentView = {
   key: string;
   instructions: string;
@@ -177,6 +181,7 @@ export type JudgmentView = {
   score?: number;
   scoreMax?: number;
   label?: string;
+  origin?: AnswerOrigin;
 };
 
 export type AskResult =

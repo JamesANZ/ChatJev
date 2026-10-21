@@ -1,5 +1,10 @@
-import { STRENGTH_CRITERIA, type QuestionDraft } from "./types";
 import { isOverviewQuestion, isTopicQuestion } from "./exam";
+import {
+  STRENGTH_CRITERIA,
+  type AnswerOrigin,
+  type QuestionDraft,
+  type SourceSnippet,
+} from "./types";
 
 const ATTACHMENT =
   /\b(this|the|attached|uploaded)\b(?:\s+\w+){0,3}\s+(document|file|pdf|attachment|text|paper|contract)\b/i;
@@ -78,6 +83,180 @@ export function documentCovers(question: string, document: string): boolean {
   return hits / tokens.length >= 0.6;
 }
 
+const NAME = /^[A-Za-z][\w'’.-]*$/;
+
+function subjectFromWords(words: string[]): string | undefined {
+  const cleaned = words.map((word) => word.replace(/[?.!,;:]+$/g, ""));
+  if (cleaned.length === 0 || cleaned.length > 3) return undefined;
+  if (!cleaned.every((word) => NAME.test(word))) return undefined;
+  const text = cleaned.join(" ");
+  if (text.length < 3) return undefined;
+  if (
+    cleaned.length > 1 &&
+    cleaned.some((word) => word[0] !== word[0]?.toUpperCase())
+  ) {
+    return undefined;
+  }
+  return text;
+}
+
+function listPieces(question: string): string[] {
+  const cleaned = question.replace(/[?.!]+$/g, "").trim();
+  const commaParts = cleaned
+    .split(/\s*,\s*/)
+    .map((piece) => piece.trim())
+    .filter(Boolean);
+  const last = commaParts.at(-1) ?? "";
+  const andParts = last
+    .split(/\s*\band\b\s+/i)
+    .map((piece) => piece.trim())
+    .filter(Boolean);
+  return [...commaParts.slice(0, -1), ...andParts];
+}
+
+export function listedSubjects(question: string): string[] {
+  const pieces = listPieces(question);
+  if (pieces.length < 2 || pieces.length > 5) return [];
+
+  const lead = pieces[0]?.split(/\s+/) ?? [];
+  let head: string | undefined;
+  for (let size = Math.min(3, lead.length); size >= 1; size -= 1) {
+    const candidate = subjectFromWords(lead.slice(-size));
+    if (candidate) {
+      head = candidate;
+      break;
+    }
+  }
+  if (!head) return [];
+
+  const tail: string[] = [];
+  for (const piece of pieces.slice(1)) {
+    const subject = subjectFromWords(piece.split(/\s+/));
+    if (!subject) return [];
+    tail.push(subject);
+  }
+  return [head, ...tail];
+}
+
+export function missingSubjects(question: string, document: string): string[] {
+  const haystack = document.toLowerCase();
+  return listedSubjects(question).filter(
+    (subject) => !haystack.includes(subject.toLowerCase()),
+  );
+}
+
+function passageAbout(text: string, subject: string): string | undefined {
+  const needle = subject.toLowerCase();
+  const chunks = text
+    .split(/\n+/)
+    .flatMap((line) => line.split(/(?<=[.!?])\s+/))
+    .map((chunk) => chunk.replace(/\s+/g, " ").trim())
+    .filter(
+      (chunk) => chunk && !/^url:/i.test(chunk) && !/^\[\d+\]/.test(chunk),
+    );
+  return chunks.find((chunk) => {
+    if (!chunk.toLowerCase().includes(needle)) return false;
+    const rest = chunk
+      .toLowerCase()
+      .replace(needle, "")
+      .replace(/[^a-z0-9]+/g, "");
+    return rest.length >= 8;
+  });
+}
+
+function draftKey(subject: string, used: Set<string>): string {
+  const base =
+    subject
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .replace(/^[^a-z]+/, "")
+      .slice(0, 40) || "answer";
+  if (!used.has(base)) {
+    used.add(base);
+    return base;
+  }
+  for (let index = 2; index < 20; index += 1) {
+    const suffix = `_${index}`;
+    const candidate = `${base.slice(0, 40 - suffix.length)}${suffix}`;
+    if (!used.has(candidate)) {
+      used.add(candidate);
+      return candidate;
+    }
+  }
+  return base;
+}
+
+export function gapFillDrafts(input: {
+  question: string;
+  document: string;
+  sourcesText: string;
+}): QuestionDraft[] | null {
+  if (asksAboutAttachment(input.question)) return null;
+  const subjects = listedSubjects(input.question);
+  const missing = new Set(
+    missingSubjects(input.question, input.document).map((subject) =>
+      subject.toLowerCase(),
+    ),
+  );
+  if (subjects.length < 2 || missing.size === 0) return null;
+  if (missing.size === subjects.length) return null;
+
+  const used = new Set<string>();
+  const drafts: QuestionDraft[] = [];
+  let fromFile = 0;
+  let fromWeb = 0;
+  for (const subject of subjects) {
+    const filePassage = passageAbout(input.document, subject);
+    const webPassage = filePassage
+      ? undefined
+      : passageAbout(input.sourcesText, subject);
+    const instructions = (filePassage ?? webPassage)?.slice(0, 400);
+    if (!instructions) continue;
+    if (filePassage) fromFile += 1;
+    else fromWeb += 1;
+    drafts.push({
+      key: draftKey(subject, used),
+      type: "noul",
+      instructions,
+    });
+  }
+  if (fromFile === 0 || fromWeb === 0 || drafts.length < 2) return null;
+  return drafts;
+}
+
+export function attributeAnswer(input: {
+  text: string;
+  filename?: string;
+  document?: string;
+  snippets: SourceSnippet[];
+}): AnswerOrigin | undefined {
+  const tokens = contentTokens(input.text);
+  if (tokens.length === 0) return undefined;
+  const score = (haystack: string) => {
+    const lower = haystack.toLowerCase();
+    const hits = tokens.filter((token) => lower.includes(token)).length;
+    return hits / tokens.length;
+  };
+  const fileScore = input.document ? score(input.document) : 0;
+  let bestScore = 0;
+  let bestSnippet: SourceSnippet | undefined;
+  for (const snippet of input.snippets) {
+    const value = score(`${snippet.title}\n${snippet.excerpt}`);
+    if (value > bestScore) {
+      bestScore = value;
+      bestSnippet = snippet;
+    }
+  }
+  if (fileScore >= 0.6 && fileScore >= bestScore && input.document?.trim()) {
+    return { kind: "file", title: input.filename?.trim() || "your file" };
+  }
+  if (bestSnippet && bestScore >= 0.6 && bestScore > fileScore) {
+    return { kind: "web", title: bestSnippet.title, url: bestSnippet.url };
+  }
+  return undefined;
+}
+
 export function needsWebEvidence(
   question: string,
   document?: string,
@@ -86,6 +265,7 @@ export function needsWebEvidence(
   if (options?.image) return false;
   if (!document?.trim()) return true;
   if (asksAboutAttachment(question)) return false;
+  if (missingSubjects(question, document).length > 0) return true;
   return !documentCovers(question, document);
 }
 

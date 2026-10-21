@@ -3,7 +3,11 @@ import {
   formatChatLog,
   normalizeChatHistory,
 } from "./conversation";
-import { needsWebEvidence } from "./evidence";
+import {
+  attributeAnswer,
+  gapFillDrafts,
+  needsWebEvidence,
+} from "./evidence";
 import { examDrafts } from "./exam";
 import { MODEL_FALLBACK_WARNING, SEARCH_MISSED_WARNING } from "./setup";
 import {
@@ -98,9 +102,19 @@ async function finishVerdict(input: {
     questions: input.questions,
   });
 
-  const judgments = Object.entries(input.questions).map(([key, item]) =>
-    viewJudgment(key, item, response.answers[key]),
-  );
+  const judgments = Object.entries(input.questions).map(([key, item]) => {
+    const view = viewJudgment(key, item, response.answers[key]);
+    const origin = attributeAnswer({
+      text:
+        view.type === "noul"
+          ? view.instructions
+          : (view.label ?? view.instructions),
+      filename: input.document?.filename,
+      document: input.document?.text,
+      snippets: input.snippets,
+    });
+    return origin ? { ...view, origin } : view;
+  });
   const fallback = judgments.map((item) => item.line).join(" ");
 
   let narration: string | null = null;
@@ -214,6 +228,30 @@ export async function askDocument(
   const searchWarning =
     webNeeded && snippets.length === 0 ? SEARCH_MISSED_WARNING : undefined;
   const askWarning = [visionWarning, searchWarning].filter(Boolean).join(" ");
+  const gapDrafts = gapFillDrafts({
+    question: trimmed,
+    document: clipped.document,
+    sourcesText: clipped.sources,
+  });
+  if (gapDrafts) {
+    const validated = validateQuestions(
+      repairDrafts(gapDrafts, { fallbackInstructions: trimmed }),
+    );
+    if (validated.ok && Object.keys(validated.questions).length > 1) {
+      return finishVerdict({
+        client,
+        llm,
+        document: evidence,
+        trimmed,
+        clipped,
+        questions: validated.questions,
+        snippets,
+        imageReading,
+        warning: askWarning || undefined,
+        history: prior,
+      });
+    }
+  }
   let feedback: string | undefined;
   let lastError: unknown;
 

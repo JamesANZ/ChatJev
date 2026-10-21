@@ -3,6 +3,9 @@ import { askDocument } from "../src/core/ask";
 import {
   asksAboutAttachment,
   claimProposition,
+  documentCovers,
+  listedSubjects,
+  missingSubjects,
   needsWebEvidence,
 } from "../src/core/evidence";
 import { gatherSystem } from "../src/core/gateway-llm";
@@ -50,6 +53,21 @@ describe("needsWebEvidence", () => {
         {
           image: true,
         },
+      ),
+    ).toBe(false);
+  });
+
+  it("searches when the file states every answer but one", () => {
+    const document = fixture("capitals.txt").toString("utf8");
+    const question = "What are the capitals of France, Spain, and Italy?";
+    expect(listedSubjects(question)).toEqual(["France", "Spain", "Italy"]);
+    expect(missingSubjects(question, document)).toEqual(["Italy"]);
+    expect(documentCovers(question, document)).toBe(true);
+    expect(needsWebEvidence(question, document)).toBe(true);
+    expect(
+      needsWebEvidence(
+        question,
+        `${document}\nThe capital of Italy is Rome.`,
       ),
     ).toBe(false);
   });
@@ -117,6 +135,52 @@ describe("web evidence answers", () => {
     expect(result.message).toContain("Nicotine is a carcinogen.");
     expect(result.message).toContain("95%");
     expect(result.sources[0]?.url).toBe(CARCINOGEN.url);
+  });
+
+  it("marks file answers and the web answer that fills the gap", async () => {
+    const heuristic = createHeuristicLlm();
+    const italy: SourceSnippet = {
+      title: "Italy",
+      url: "https://example.com/italy",
+      excerpt: "The capital of Italy is Rome.",
+    };
+    const result = await askDocument(
+      createDemoJevClient(),
+      {
+        id: "capitals",
+        filename: "capitals.txt",
+        mimeType: "text/plain",
+        text: fixture("capitals.txt").toString("utf8"),
+        charCount: 76,
+        truncated: false,
+      },
+      "What are the capitals of France, Spain, and Italy?",
+      {
+        ...heuristic,
+        async gather() {
+          return [italy];
+        },
+      },
+    );
+
+    expect(result.kind).toBe("verdict");
+    if (result.kind !== "verdict") return;
+    const origins = Object.fromEntries(
+      result.judgments.map((item) => [item.key, item.origin]),
+    );
+    expect(origins.france).toEqual({ kind: "file", title: "capitals.txt" });
+    expect(origins.spain).toEqual({ kind: "file", title: "capitals.txt" });
+    expect(origins.italy).toEqual({
+      kind: "web",
+      title: "Italy",
+      url: "https://example.com/italy",
+    });
+    expect(result.judgments.find((item) => item.key === "france")?.line).toContain(
+      "The capital of France is Paris.",
+    );
+    expect(result.judgments.find((item) => item.key === "italy")?.line).toContain(
+      "The capital of Italy is Rome.",
+    );
   });
 });
 
