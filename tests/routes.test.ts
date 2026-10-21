@@ -153,6 +153,49 @@ describe("HTTP routes", () => {
     ]);
   });
 
+  it("compares documents sent together", async () => {
+    const asked = await handleAsk(
+      new Request("http://localhost/api/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: "Which document has references to Gerald?",
+          documents: [
+            {
+              id: "clinic",
+              filename: "clinic.txt",
+              mimeType: "text/plain",
+              text: "This clinic note is about health and blood pressure.",
+              truncated: false,
+            },
+            {
+              id: "meeting",
+              filename: "meeting.txt",
+              mimeType: "text/plain",
+              text: "Gerald confirmed the Tuesday meeting.",
+              truncated: false,
+            },
+          ],
+        }),
+      }),
+      createDemoJevClient(),
+    );
+    expect(asked.status).toBe(200);
+    const body = (await asked.json()) as {
+      kind: string;
+      judgments: Array<{ instructions: string; noul?: number }>;
+    };
+    expect(body.kind).toBe("verdict");
+    expect(
+      body.judgments.find((item) => item.instructions.includes("meeting.txt"))
+        ?.noul,
+    ).toBeGreaterThan(0.6);
+    expect(
+      body.judgments.find((item) => item.instructions.includes("clinic.txt"))
+        ?.noul,
+    ).toBeLessThan(0.4);
+  });
+
   it("rejects unsupported and oversized uploads", async () => {
     const png = await attach(
       "scan.png",

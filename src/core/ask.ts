@@ -3,8 +3,11 @@ import {
   formatChatLog,
   normalizeChatHistory,
 } from "./conversation";
+import { bundleDocuments } from "./documents";
 import {
   attributeAnswer,
+  asksToCompareDocuments,
+  compareDocumentDrafts,
   gapFillDrafts,
   needsWebEvidence,
 } from "./evidence";
@@ -27,7 +30,9 @@ import {
 import { formatSources } from "./snippets";
 import {
   ChatJevError,
+  MAX_STATE_CHARS,
   type AskResult,
+  type AttachedImage,
   type ChatTurn,
   type DocumentContext,
   type JevClient,
@@ -73,32 +78,49 @@ function refusalMessage(error: unknown): string {
   );
 }
 
+function listDocuments(
+  document: DocumentContext | DocumentContext[] | null,
+): DocumentContext[] {
+  if (!document) return [];
+  if (Array.isArray(document)) return document;
+  return [document];
+}
+
+function readingText(
+  filename: string,
+  reading: string,
+  soleImage: boolean,
+): string {
+  const note = soleImage
+    ? "This description is not the picture. The picture is `photo`."
+    : "This description is not the picture.";
+  return `Vision-model reading of ${filename}. ${note}\n\n${reading}`;
+}
+
 async function finishVerdict(input: {
   client: JevClient;
   llm: LlmClient;
-  document: DocumentContext | null;
+  documents: DocumentContext[];
+  filename: string;
+  photo?: Pick<AttachedImage, "format" | "dataBase64">;
   trimmed: string;
   clipped: { document: string; sources: string; truncated: boolean };
   questions: Record<string, JevQuestion>;
   snippets: SourceSnippet[];
   imageReading?: string;
+  evidenceTruncated: boolean;
   warning?: string;
   history: ChatTurn[];
 }): Promise<AskResult> {
   const response = await input.client.evaluate({
     state: {
-      filename: input.document?.filename ?? "",
+      filename: input.filename,
       document: input.clipped.document,
       sources: input.clipped.sources,
       user_question: input.trimmed,
       ...(input.history.length ? { chat: formatChatLog(input.history) } : {}),
     },
-    image: input.document?.image
-      ? {
-          format: input.document.image.format,
-          dataBase64: input.document.image.dataBase64,
-        }
-      : undefined,
+    image: input.photo,
     questions: input.questions,
   });
 
@@ -109,8 +131,11 @@ async function finishVerdict(input: {
         view.type === "noul"
           ? view.instructions
           : (view.label ?? view.instructions),
-      filename: input.document?.filename,
-      document: input.document?.text,
+      filename: input.documents.length === 1 ? input.filename : undefined,
+      documents: input.documents.map((item) => ({
+        filename: item.filename,
+        text: item.text,
+      })),
       snippets: input.snippets,
     });
     return origin ? { ...view, origin } : view;
@@ -145,8 +170,7 @@ async function finishVerdict(input: {
     judgments,
     sources: input.snippets,
     imageReading: input.imageReading,
-    evidenceTruncated:
-      Boolean(input.document?.truncated) || input.clipped.truncated,
+    evidenceTruncated: input.evidenceTruncated || input.clipped.truncated,
     model: response.model,
     usage: response.usage,
     answers: response.answers,
@@ -156,7 +180,7 @@ async function finishVerdict(input: {
 
 export async function askDocument(
   client: JevClient,
-  document: DocumentContext | null,
+  document: DocumentContext | DocumentContext[] | null,
   question: string,
   llm: LlmClient = createHeuristicLlm(),
   history: ChatTurn[] | unknown = [],
@@ -171,26 +195,33 @@ export async function askDocument(
     };
   }
 
-  const imageAttached = Boolean(document?.image);
-  let evidence = document;
-  let imageReading: string | undefined;
+  const attached = listDocuments(document);
+  const photos = attached.filter((item) => item.image);
+  const soleImage = photos.length === 1;
   let visionWarning: string | undefined;
-  if (document?.image && llm.describeImage) {
+  const readings: string[] = [];
+  const prepared: DocumentContext[] = [];
+  for (const item of attached) {
+    if (!item.image || !llm.describeImage) {
+      prepared.push(item);
+      continue;
+    }
     try {
       const reading = (
         await llm.describeImage({
-          filename: document.filename,
+          filename: item.filename,
           question: trimmed,
-          image: document.image,
+          image: item.image,
           history: prior,
         })
       ).trim();
       if (reading) {
-        imageReading = reading;
-        evidence = {
-          ...document,
-          text: `Vision-model reading of ${document.filename}. This description is not the picture. The picture is \`photo\`.\n\n${reading}`,
-        };
+        readings.push(soleImage ? reading : `${item.filename}: ${reading}`);
+        prepared.push({
+          ...item,
+          text: readingText(item.filename, reading, soleImage),
+        });
+        continue;
       }
     } catch (error) {
       if (
@@ -202,18 +233,44 @@ export async function askDocument(
         throw error;
       }
       visionWarning =
-        "The vision model could not read this image, so the questions were written without a description of it. Jev still received the picture.";
+        "The vision model could not read an image, so the questions were written without a description of it. Jev still received a single picture when only one image is attached.";
     }
+    prepared.push(item);
   }
+  if (photos.length > 1) {
+    visionWarning = [
+      visionWarning,
+      "Jev can look at one picture at a time, so these images are compared from written readings.",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+  const imageAttached = soleImage;
+  const photo = soleImage ? photos[0]?.image : undefined;
+  const filename =
+    prepared.length === 1
+      ? (prepared[0]?.filename ?? "")
+      : prepared.map((item) => item.filename).join(", ");
+  const gatheredText =
+    prepared.length > 1
+      ? prepared
+          .map((item) => `===== ${item.filename} =====\n${item.text}`)
+          .join("\n\n")
+      : (prepared[0]?.text ?? "");
+  const files = prepared.map((item) => ({
+    filename: item.filename,
+    text: item.text,
+  }));
   const snippets = await llm.gather({
     question: trimmed,
-    filename: evidence?.filename,
-    document: evidence?.text,
+    filename,
+    document: gatheredText,
+    files,
     image: imageAttached,
     history: prior,
   });
 
-  if (!document && snippets.length === 0) {
+  if (prepared.length === 0 && snippets.length === 0) {
     throw new ChatJevError(
       400,
       "missing_evidence",
@@ -221,34 +278,59 @@ export async function askDocument(
     );
   }
 
-  const clipped = clipEvidence(evidence?.text ?? "", formatSources(snippets));
-  const webNeeded = needsWebEvidence(trimmed, evidence?.text, {
+  const sourcesText = formatSources(snippets);
+  const sourceReserve = sourcesText
+    ? Math.min(sourcesText.length, Math.floor(MAX_STATE_CHARS * 0.35))
+    : 0;
+  const bundled = bundleDocuments(files, MAX_STATE_CHARS - sourceReserve);
+  const clipped = clipEvidence(bundled.text, sourcesText);
+  const webNeeded = needsWebEvidence(trimmed, bundled.text || gatheredText, {
     image: imageAttached,
+    fileCount: prepared.length,
   });
   const searchWarning =
     webNeeded && snippets.length === 0 ? SEARCH_MISSED_WARNING : undefined;
-  const askWarning = [visionWarning, searchWarning].filter(Boolean).join(" ");
+  const compareWarning =
+    prepared.length > 5 && asksToCompareDocuments(trimmed)
+      ? "Jev scores five files on a comparison. Remove one of the later files to score the rest."
+      : undefined;
+  const imageReading = readings.length > 0 ? readings.join("\n\n") : undefined;
+  const evidenceTruncated =
+    prepared.some((item) => item.truncated) || bundled.truncated;
+  const askWarning = [visionWarning, compareWarning, searchWarning]
+    .filter(Boolean)
+    .join(" ");
+  const verdict = {
+    client,
+    llm,
+    documents: prepared,
+    filename,
+    photo: photo
+      ? { format: photo.format, dataBase64: photo.dataBase64 }
+      : undefined,
+    trimmed,
+    clipped,
+    snippets,
+    imageReading,
+    evidenceTruncated,
+    history: prior,
+  };
   const gapDrafts = gapFillDrafts({
     question: trimmed,
     document: clipped.document,
     sourcesText: clipped.sources,
   });
-  if (gapDrafts) {
+  const comparison = compareDocumentDrafts(trimmed, bundled.files);
+  const earlyDrafts = gapDrafts ?? comparison;
+  if (earlyDrafts) {
     const validated = validateQuestions(
-      repairDrafts(gapDrafts, { fallbackInstructions: trimmed }),
+      repairDrafts(earlyDrafts, { fallbackInstructions: trimmed }),
     );
     if (validated.ok && Object.keys(validated.questions).length > 1) {
       return finishVerdict({
-        client,
-        llm,
-        document: evidence,
-        trimmed,
-        clipped,
+        ...verdict,
         questions: validated.questions,
-        snippets,
-        imageReading,
         warning: askWarning || undefined,
-        history: prior,
       });
     }
   }
@@ -261,8 +343,9 @@ export async function askDocument(
     try {
       drafts = await llm.compile({
         question: trimmed,
-        filename: evidence?.filename ?? "",
+        filename,
         document: clipped.document,
+        files: bundled.files,
         sourcesText: clipped.sources,
         feedback,
         attempt,
@@ -299,16 +382,9 @@ export async function askDocument(
 
     try {
       return await finishVerdict({
-        client,
-        llm,
-        document: evidence,
-        trimmed,
-        clipped,
+        ...verdict,
         questions: validated.questions,
-        snippets,
-        imageReading,
         warning: askWarning || undefined,
-        history: prior,
       });
     } catch (error) {
       if (!retryableFormulationError(error)) throw error;
@@ -335,16 +411,9 @@ export async function askDocument(
   if (fallback.ok && Object.keys(fallback.questions).length > 0) {
     try {
       return await finishVerdict({
-        client,
-        llm,
-        document: evidence,
-        trimmed,
-        clipped,
+        ...verdict,
         questions: fallback.questions,
-        snippets,
-        imageReading,
         warning: [MODEL_FALLBACK_WARNING, askWarning].filter(Boolean).join(" "),
-        history: prior,
       });
     } catch (error) {
       if (!retryableFormulationError(error)) throw error;

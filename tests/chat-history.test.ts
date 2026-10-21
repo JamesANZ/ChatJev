@@ -53,7 +53,7 @@ function chat(
     id,
     title: "placeholder",
     updatedAt,
-    document: null,
+    documents: [],
     ...extra,
     messages: extra?.messages ?? [user(`${id}-q`, text)],
   };
@@ -94,7 +94,7 @@ describe("chat history", () => {
             user("q1", "Is this claim supported?"),
             reply("a1", "Is this claim supported?"),
           ],
-          document,
+          documents: [document],
         }),
       ],
     };
@@ -105,7 +105,7 @@ describe("chat history", () => {
         {
           id: "one",
           title: "Is this claim supported?",
-          document,
+          documents: [document],
           messages: history.chats[0]?.messages,
         },
       ],
@@ -129,13 +129,52 @@ describe("chat history", () => {
     };
     const history: ChatHistory = {
       activeId: "one",
-      chats: [chat("one", "Is there a person?", 2, { document: photo })],
+      chats: [chat("one", "Is there a person?", 2, { documents: [photo] })],
     };
 
-    expect(saveHistory(history, storage).chats[0]?.document?.image).toEqual(
+    expect(saveHistory(history, storage).chats[0]?.documents[0]?.image).toEqual(
       photo.image,
     );
-    expect(loadHistory(storage).chats[0]?.document).toEqual(photo);
+    expect(loadHistory(storage).chats[0]?.documents).toEqual([photo]);
+  });
+
+  it("keeps several attachments and reads an older single document", () => {
+    const storage = memoryStorage();
+    const second: DocumentContext = {
+      ...document,
+      id: "doc-2",
+      filename: "clinic.txt",
+      text: "A clinic note about health.",
+    };
+    const history: ChatHistory = {
+      activeId: "one",
+      chats: [
+        chat("one", "Which document mentions the notes?", 3, {
+          documents: [document, second],
+        }),
+      ],
+    };
+    expect(saveHistory(history, storage).chats[0]?.documents).toEqual([
+      document,
+      second,
+    ]);
+
+    storage.setItem(
+      HISTORY_KEY,
+      JSON.stringify({
+        activeId: "one",
+        chats: [
+          {
+            id: "one",
+            title: "Is this claim supported?",
+            updatedAt: 4,
+            messages: [user("q1", "Is this claim supported?")],
+            document,
+          },
+        ],
+      }),
+    );
+    expect(loadHistory(storage).chats[0]?.documents).toEqual([document]);
   });
 
   it("titles a chat from the first user message", () => {

@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import type { ChatTurn, DocumentContext } from "@/core/types";
+import {
+  MAX_ATTACHMENTS,
+  type ChatTurn,
+  type DocumentContext,
+} from "@/core/types";
 import { askAttachedDocument, uploadDocument } from "@/lib/client";
 import {
   appendMessage,
@@ -9,7 +13,7 @@ import {
   loadHistory,
   saveChat,
   saveHistory,
-  setChatDocument,
+  setChatDocuments,
   type ChatHistory,
 } from "@/lib/chat-history";
 import { ChatThread, type ChatItem } from "./ChatThread";
@@ -69,9 +73,7 @@ function useDesktopLayout() {
 
 export function ChatApp() {
   const [history, setHistory] = useState<ChatHistory>(EMPTY_HISTORY);
-  const [draftDocument, setDraftDocument] = useState<DocumentContext | null>(
-    null,
-  );
+  const [draftDocuments, setDraftDocuments] = useState<DocumentContext[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [busy, setBusy] = useState(false);
   const [pendingChatId, setPendingChatId] = useState<string | null>(null);
@@ -90,7 +92,7 @@ export function ChatApp() {
   const active =
     history.chats.find((chat) => chat.id === history.activeId) ?? null;
   const messages = active?.messages ?? [];
-  const document = active ? active.document : draftDocument;
+  const documents = active ? active.documents : draftDocuments;
 
   useEffect(() => {
     setHistory(loadHistory(window.localStorage));
@@ -135,32 +137,57 @@ export function ChatApp() {
     node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
   }, [messages, busy]);
 
-  async function onFile(file: File) {
-    if (busy) return;
+  async function onFiles(files: File[]) {
+    if (busy || files.length === 0) return;
+    const room = MAX_ATTACHMENTS - documents.length;
+    if (room <= 0) {
+      setError(`Attach up to ${MAX_ATTACHMENTS} files.`);
+      return;
+    }
+    const batch = files.slice(0, room);
     const chatId = active?.id ?? null;
     setError(null);
     setBusy(true);
-    try {
-      const uploaded = await uploadDocument(file);
+    const settled = await Promise.allSettled(
+      batch.map((file) => uploadDocument(file)),
+    );
+    const uploaded = settled.flatMap((result) =>
+      result.status === "fulfilled" ? [result.value] : [],
+    );
+    const failure = settled.find((result) => result.status === "rejected");
+    if (uploaded.length > 0) {
       if (chatId) {
-        setHistory((current) => setChatDocument(current, chatId, uploaded));
+        setHistory((current) => {
+          const existing =
+            current.chats.find((chat) => chat.id === chatId)?.documents ?? [];
+          return setChatDocuments(current, chatId, [...existing, ...uploaded]);
+        });
       } else {
-        setDraftDocument(uploaded);
+        setDraftDocuments((current) => [...current, ...uploaded]);
       }
       setAskNotice(null);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not attach that document.",
-      );
-    } finally {
-      setBusy(false);
     }
+    const notes: string[] = [];
+    if (files.length > room) {
+      notes.push(
+        `Attach up to ${MAX_ATTACHMENTS} files. Extra files were left out.`,
+      );
+    }
+    if (failure?.status === "rejected") {
+      notes.push(
+        failure.reason instanceof Error
+          ? failure.reason.message
+          : "Could not attach that document.",
+      );
+    }
+    setError(notes.join(" ") || null);
+    setBusy(false);
   }
 
   async function onSend(question: string) {
     if (busy) return;
     const chatId = active?.id ?? nextId();
-    const attached = document;
+    const attached = documents;
     const prior = priorTurns(messages);
     const userMessage: ChatItem = {
       id: nextId(),
@@ -176,10 +203,10 @@ export function ChatApp() {
         title: "",
         updatedAt: Date.now(),
         messages: [...(open?.messages ?? []), userMessage],
-        document: open ? open.document : attached,
+        documents: open ? open.documents : attached,
       });
     });
-    setDraftDocument(null);
+    setDraftDocuments([]);
     setPendingChatId(chatId);
     setBusy(true);
     try {
@@ -216,7 +243,7 @@ export function ChatApp() {
 
   function onNewChat() {
     setHistory((current) => ({ ...current, activeId: null }));
-    setDraftDocument(null);
+    setDraftDocuments([]);
     setError(null);
     setAskNotice(null);
     setSidebarOpen(false);
@@ -224,25 +251,33 @@ export function ChatApp() {
 
   function onSelectChat(chatId: string) {
     setHistory((current) => ({ ...current, activeId: chatId }));
-    setDraftDocument(null);
+    setDraftDocuments([]);
     setError(null);
     setAskNotice(null);
     setSidebarOpen(false);
   }
 
   function onDeleteChat(chatId: string) {
-    if (history.activeId === chatId) setDraftDocument(null);
+    if (history.activeId === chatId) setDraftDocuments([]);
     setHistory((current) => deleteChat(current, chatId));
     setError(null);
     setAskNotice(null);
   }
 
-  function onClearDocument() {
+  function onRemoveDocument(id: string) {
     if (active) {
       const chatId = active.id;
-      setHistory((current) => setChatDocument(current, chatId, null));
+      setHistory((current) =>
+        setChatDocuments(
+          current,
+          chatId,
+          (
+            current.chats.find((chat) => chat.id === chatId)?.documents ?? []
+          ).filter((item) => item.id !== id),
+        ),
+      );
     } else {
-      setDraftDocument(null);
+      setDraftDocuments((current) => current.filter((item) => item.id !== id));
     }
     setError(null);
     setAskNotice(null);
@@ -270,8 +305,8 @@ export function ChatApp() {
     if (!hasFiles(event)) return;
     event.preventDefault();
     setDragging(false);
-    const file = event.dataTransfer.files?.[0];
-    if (file && !busy) void onFile(file);
+    const files = Array.from(event.dataTransfer.files ?? []);
+    if (files.length > 0 && !busy) void onFiles(files);
   }
 
   const notices = [...setupNotices, ...(askNotice ? [askNotice] : [])];
@@ -419,8 +454,8 @@ export function ChatApp() {
                 <li>
                   <h2>Give Jev the sources</h2>
                   <p>
-                    If a file is missing an answer, ChatJev looks that part up
-                    and shows where each answer came from.
+                    Attach one or more files. If they miss an answer, ChatJev
+                    looks that part up and shows where each answer came from.
                   </p>
                 </li>
                 <li>
@@ -430,8 +465,8 @@ export function ChatApp() {
               </ol>
               <figure className="gap-example">
                 <figcaption>
-                  Example. capitals.txt states France and Spain. Italy is not
-                  in the file, so that answer is marked from the web.
+                  Example. capitals.txt states France and Spain. Italy is not in
+                  the file, so that answer is marked from the web.
                 </figcaption>
                 <ul>
                   <li className="answer-row">
@@ -491,19 +526,27 @@ export function ChatApp() {
               disabled={busy}
               seed={composerSeed}
               placeholder={
-                document?.image
-                  ? "Ask about this image"
-                  : document
-                    ? "Ask about this document"
-                    : "Message ChatJev"
+                documents.length > 1
+                  ? "Ask about these files"
+                  : documents[0]?.image
+                    ? "Ask about this image"
+                    : documents[0]
+                      ? "Ask about this document"
+                      : "Message ChatJev"
               }
               attachment={
-                document ? (
-                  <FileChip session={document} onClear={onClearDocument} />
-                ) : null
+                documents.length > 0
+                  ? documents.map((item) => (
+                      <FileChip
+                        key={item.id}
+                        session={item}
+                        onClear={() => onRemoveDocument(item.id)}
+                      />
+                    ))
+                  : null
               }
               onSend={onSend}
-              onFile={onFile}
+              onFile={onFiles}
             />
             <p className="fineprint">
               Jev scores sources. It does not invent the answer.

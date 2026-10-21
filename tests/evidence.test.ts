@@ -65,10 +65,7 @@ describe("needsWebEvidence", () => {
     expect(documentCovers(question, document)).toBe(true);
     expect(needsWebEvidence(question, document)).toBe(true);
     expect(
-      needsWebEvidence(
-        question,
-        `${document}\nThe capital of Italy is Rome.`,
-      ),
+      needsWebEvidence(question, `${document}\nThe capital of Italy is Rome.`),
     ).toBe(false);
   });
 });
@@ -175,12 +172,12 @@ describe("web evidence answers", () => {
       title: "Italy",
       url: "https://example.com/italy",
     });
-    expect(result.judgments.find((item) => item.key === "france")?.line).toContain(
-      "The capital of France is Paris.",
-    );
-    expect(result.judgments.find((item) => item.key === "italy")?.line).toContain(
-      "The capital of Italy is Rome.",
-    );
+    expect(
+      result.judgments.find((item) => item.key === "france")?.line,
+    ).toContain("The capital of France is Paris.");
+    expect(
+      result.judgments.find((item) => item.key === "italy")?.line,
+    ).toContain("The capital of Italy is Rome.");
   });
 });
 

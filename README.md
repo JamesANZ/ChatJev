@@ -64,10 +64,10 @@ npx vercel --prod
 
 ## API
 
-| Method | Path            | Purpose                                                                         |
-| ------ | --------------- | ------------------------------------------------------------------------------- |
-| `POST` | `/api/sessions` | Multipart upload (`file`). Returns extracted document text for the next ask.    |
-| `POST` | `/api/ask`      | JSON `{ question, document? }`. Returns judgments plus a reading, or a refusal. |
+| Method | Path            | Purpose                                                                                                                           |
+| ------ | --------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `POST` | `/api/sessions` | Multipart upload (`file`). Returns extracted document text for the next ask. A chat can hold several files.                       |
+| `POST` | `/api/ask`      | JSON `{ question, documents?, document? }`. Returns judgments plus a reading, or a refusal. Comparison questions score each file. |
 
 Document text is held in the browser after extract so Vercel serverless instances do not need shared session memory.
 

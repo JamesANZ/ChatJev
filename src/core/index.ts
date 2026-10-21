@@ -5,6 +5,7 @@ export * from "./jev-client";
 export * from "./typesafe-client";
 export * from "./classify";
 export * from "./compile";
+export * from "./documents";
 export * from "./exam";
 export * from "./evidence";
 export * from "./verdict";

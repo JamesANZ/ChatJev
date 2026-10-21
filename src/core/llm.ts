@@ -1,6 +1,11 @@
 import { compileEvaluation } from "./compile";
 import { followUpQuestion } from "./conversation";
-import { claimProposition, needsWebEvidence, webClaimDrafts } from "./evidence";
+import {
+  claimProposition,
+  compareDocumentDrafts,
+  needsWebEvidence,
+  webClaimDrafts,
+} from "./evidence";
 import {
   examDrafts,
   isTopicQuestion,
@@ -18,6 +23,7 @@ export type GatherInput = {
   question: string;
   filename?: string;
   document?: string;
+  files?: ReadonlyArray<{ filename: string; text: string }>;
   image?: boolean;
   history?: ChatTurn[];
 };
@@ -58,6 +64,7 @@ export type CompileInput = {
   question: string;
   filename: string;
   document: string;
+  files?: ReadonlyArray<{ filename: string; text: string }>;
   sourcesText: string;
   feedback?: string;
   attempt?: number;
@@ -115,6 +122,11 @@ export function createHeuristicLlm(): LlmClient {
         ? followUpQuestion(input.question, input.history)
         : input.question;
       const strategy = input.strategy ?? "match";
+      const fileCount = input.files?.length;
+      if (strategy === "match" && input.files && input.files.length > 1) {
+        const comparison = compareDocumentDrafts(asked, input.files);
+        if (comparison && comparison.length > 1) return comparison;
+      }
       if (strategy === "exam" || strategy === "simple") {
         return pointAtPhoto(
           examDrafts({ ...input, question: asked }),
@@ -126,6 +138,7 @@ export function createHeuristicLlm(): LlmClient {
           ? topicProposition(asked)
           : needsWebEvidence(asked, input.document, {
                 image: input.image,
+                fileCount,
               })
             ? claimProposition(asked)
             : asked.trim().slice(0, 400);
@@ -155,6 +168,7 @@ export function createHeuristicLlm(): LlmClient {
       if (
         needsWebEvidence(asked, input.document, {
           image: input.image,
+          fileCount,
         })
       ) {
         if (shouldAnswerAsExam(asked)) {

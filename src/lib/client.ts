@@ -30,17 +30,35 @@ export async function uploadDocument(file: File): Promise<DocumentContext> {
 }
 
 export async function askAttachedDocument(
-  document: Pick<
-    DocumentContext,
-    "id" | "filename" | "mimeType" | "text" | "truncated" | "image"
-  > | null,
+  document:
+    | Pick<
+        DocumentContext,
+        "id" | "filename" | "mimeType" | "text" | "truncated" | "image"
+      >
+    | Array<
+        Pick<
+          DocumentContext,
+          "id" | "filename" | "mimeType" | "text" | "truncated" | "image"
+        >
+      >
+    | null,
   question: string,
   history: ChatTurn[] = [],
 ): Promise<AskResult> {
+  const documents = !document
+    ? []
+    : Array.isArray(document)
+      ? document
+      : [document];
   const response = await fetch("/api/ask", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, document, history }),
+    body: JSON.stringify({
+      question,
+      documents,
+      document: documents.length === 1 ? documents[0] : null,
+      history,
+    }),
   });
   if (!response.ok) {
     throw await readError(response);

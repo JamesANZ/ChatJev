@@ -20,7 +20,7 @@ type MessageInputProps = {
   attachment?: ReactNode;
   seed?: ComposerSeed | null;
   onSend: (question: string) => void;
-  onFile: (file: File) => void;
+  onFile: (files: File[]) => void;
 };
 
 const ACCEPT =
@@ -84,7 +84,7 @@ export function MessageInput({
         <button
           type="button"
           className="icon-btn"
-          aria-label="Attach a document or image"
+          aria-label="Attach documents or images"
           disabled={disabled}
           onClick={() => fileInput.current?.click()}
         >
@@ -139,10 +139,11 @@ export function MessageInput({
           ref={fileInput}
           type="file"
           hidden
+          multiple
           accept={ACCEPT}
           onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) onFile(file);
+            const files = Array.from(event.target.files ?? []);
+            if (files.length > 0) onFile(files);
             event.target.value = "";
           }}
         />

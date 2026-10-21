@@ -2,6 +2,7 @@ export const STATE_TOKEN_BUDGET = 32_000;
 export const CHARS_PER_TOKEN = 4;
 export const MAX_STATE_CHARS = STATE_TOKEN_BUDGET * CHARS_PER_TOKEN;
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+export const MAX_ATTACHMENTS = 8;
 export const JUDGMENT_NOUL_THRESHOLD = 0.6;
 export const UNSURE_LOW = 0.4;
 export const UNSURE_HIGH = 0.6;
@@ -166,8 +167,7 @@ export type QuestionDraft = {
 };
 
 export type AnswerOrigin =
-  | { kind: "file"; title: string }
-  | { kind: "web"; title: string; url: string };
+  { kind: "file"; title: string } | { kind: "web"; title: string; url: string };
 
 export type JudgmentView = {
   key: string;

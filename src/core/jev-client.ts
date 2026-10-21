@@ -76,6 +76,51 @@ export function requireChoice<T extends string>(
   };
 }
 
+const FILE_CLAIM_WORDS = new Set([
+  "about",
+  "contains",
+  "discusses",
+  "document",
+  "file",
+  "include",
+  "includes",
+  "mention",
+  "mentions",
+  "names",
+  "reference",
+  "references",
+  "refers",
+]);
+
+function noulForFile(
+  instructions: string,
+  document: string,
+  shared: number,
+): number {
+  const sections = [
+    ...document.matchAll(/===== (.+?) =====\n([\s\S]*?)(?=\n===== |$)/g),
+  ];
+  if (sections.length < 2) return shared;
+  const named = sections.find((section) =>
+    instructions.includes(section[1] ?? ""),
+  );
+  const filename = named?.[1] ?? "";
+  const body = named?.[2] ?? "";
+  if (!filename || !named) return shared;
+  const claim = instructions.replace(filename, " ");
+  const tokens = claim
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length > 3 && !FILE_CLAIM_WORDS.has(word));
+  if (tokens.length === 0) return overlap(instructions, body.toLowerCase());
+  const hits = tokens.filter((token) =>
+    body.toLowerCase().includes(token),
+  ).length;
+  if (hits === 0) return 0.12;
+  if (hits === tokens.length) return 0.91;
+  return Math.min(0.95, 0.15 + (0.8 * hits) / tokens.length);
+}
+
 function overlap(instructions: string, haystack: string): number {
   const tokens = instructions
     .toLowerCase()
@@ -250,7 +295,11 @@ export function createDemoJevClient(): JevClient {
     const noul = overlap(question || "claim", haystack);
     const answers: Record<string, JevAnswer> = {};
     for (const [key, item] of Object.entries(request.questions)) {
-      answers[key] = demoAnswer(item, noul, {
+      const scored =
+        item.type === "noul"
+          ? noulForFile(item.instructions, state.document ?? "", noul)
+          : noul;
+      answers[key] = demoAnswer(item, scored, {
         haystack,
         userQuestion: question,
       });

@@ -428,4 +428,113 @@ describe("askDocument", () => {
     expect(result.question).toBe("Can Labor win?");
     expect(result.message).toContain("40%");
   });
+
+  it("scores each attached document when asked which one matches", async () => {
+    const clinic = {
+      id: "clinic",
+      filename: "clinic.txt",
+      mimeType: "text/plain",
+      text: "This clinic note is about health and blood pressure.",
+      charCount: 52,
+      truncated: false,
+    };
+    const meeting = {
+      id: "meeting",
+      filename: "meeting.txt",
+      mimeType: "text/plain",
+      text: "Gerald confirmed the Tuesday meeting.",
+      charCount: 37,
+      truncated: false,
+    };
+    const gerald = await askDocument(
+      createDemoJevClient(),
+      [clinic, meeting],
+      "Which document has references to Gerald?",
+    );
+    expect(gerald.kind).toBe("verdict");
+    if (gerald.kind !== "verdict") return;
+    const geraldFile = gerald.judgments.find((item) =>
+      item.instructions.includes("meeting.txt"),
+    );
+    const otherFile = gerald.judgments.find((item) =>
+      item.instructions.includes("clinic.txt"),
+    );
+    expect(geraldFile?.instructions).toBe("meeting.txt mentions Gerald.");
+    expect(geraldFile?.noul).toBeGreaterThan(0.6);
+    expect(geraldFile?.origin).toEqual({ kind: "file", title: "meeting.txt" });
+    expect(otherFile?.noul).toBeLessThan(0.4);
+    expect(otherFile?.origin).toEqual({ kind: "file", title: "clinic.txt" });
+
+    const health = await askDocument(
+      createDemoJevClient(),
+      [clinic, meeting],
+      "Which document is about health?",
+    );
+    expect(health.kind).toBe("verdict");
+    if (health.kind !== "verdict") return;
+    expect(
+      health.judgments.find((item) => item.instructions.includes("clinic.txt"))
+        ?.noul,
+    ).toBeGreaterThan(0.6);
+    expect(
+      health.judgments.find((item) => item.instructions.includes("meeting.txt"))
+        ?.noul,
+    ).toBeLessThan(0.4);
+  });
+
+  it("keeps every attached file in the evidence", async () => {
+    const client = new FakeJevClient((request) => {
+      const state = request.state as { document?: string; filename?: string };
+      expect(state.filename).toBe("clinic.txt, meeting.txt");
+      expect(state.document).toContain("===== clinic.txt =====");
+      expect(state.document).toContain("blood pressure");
+      expect(state.document).toContain("===== meeting.txt =====");
+      expect(state.document).toContain("Gerald");
+      return {
+        model: "jev-test",
+        usage: { input_tokens: 10, output_tokens: 2 },
+        answers: { claim: noulAnswer(0.8) },
+      };
+    });
+    const result = await askDocument(
+      client,
+      [
+        {
+          id: "clinic",
+          filename: "clinic.txt",
+          mimeType: "text/plain",
+          text: "This clinic note is about health and blood pressure.",
+          charCount: 52,
+          truncated: false,
+        },
+        {
+          id: "meeting",
+          filename: "meeting.txt",
+          mimeType: "text/plain",
+          text: "Gerald confirmed the Tuesday meeting.",
+          charCount: 37,
+          truncated: false,
+        },
+      ],
+      "Does the evidence mention blood pressure?",
+      {
+        async gather() {
+          return [];
+        },
+        async compile() {
+          return [
+            {
+              key: "claim",
+              type: "noul",
+              instructions: "The evidence mentions blood pressure.",
+            },
+          ];
+        },
+        async narrate(input) {
+          return input.lines.join(" ");
+        },
+      },
+    );
+    expect(result.kind).toBe("verdict");
+  });
 });

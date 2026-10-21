@@ -59,6 +59,80 @@ export function contentTokens(text: string): string[] {
     .filter((word) => word.length > 3 && !STOP.has(word));
 }
 
+const WHICH_FILE =
+  /\b(?:which|what)\s+(?:of\s+(?:these|those|the|them)\s+)?(?:documents?|files?|attachments?|pdfs?|ones?)\b/i;
+const EVERY_FILE =
+  /\b(?:each|every|all|both)\s+(?:of\s+)?(?:the\s+)?(?:documents?|files?|attachments?)\b/i;
+const COMPARE_FILES =
+  /\b(?:compare|comparison|difference between)\b[\s\S]{0,80}\b(?:documents?|files?|attachments?|them|these)\b|\b(?:documents?|files?|attachments?|them|these)\b[\s\S]{0,40}\b(?:compare|comparison|difference between)\b/i;
+
+export function asksToCompareDocuments(question: string): boolean {
+  const trimmed = question.trim();
+  if (!trimmed) return false;
+  return (
+    WHICH_FILE.test(trimmed) ||
+    EVERY_FILE.test(trimmed) ||
+    COMPARE_FILES.test(trimmed)
+  );
+}
+
+const CLAIM_NOISE =
+  /\b(?:in|from|among)\s+(?:it|them|these|those|the\s+(?:documents?|files?|attachments?))\s*$/i;
+
+function cleanClaim(value: string): string {
+  return value
+    .replace(/[?.!]+$/g, "")
+    .replace(CLAIM_NOISE, "")
+    .replace(/^["“]+|["”]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function fileClaim(question: string): string | null {
+  const patterns = [
+    {
+      pattern: /\babout\s+(.+)$/i,
+      format: (value: string) => `is about ${value}.`,
+    },
+    {
+      pattern:
+        /\b(?:has\s+)?(?:references?\s+to|refers\s+to|mentions?|contains?|includes?|names?|discusses?)\s+(.+)$/i,
+      format: (value: string) => `mentions ${value}.`,
+    },
+  ];
+  let best: { index: number; claim: string } | null = null;
+  for (const item of patterns) {
+    const match = item.pattern.exec(question);
+    const captured = match?.[1];
+    if (!match || match.index < 0 || !captured) continue;
+    const cleaned = cleanClaim(captured);
+    if (!cleaned) continue;
+    if (!best || match.index < best.index) {
+      best = { index: match.index, claim: item.format(cleaned) };
+    }
+  }
+  return best?.claim ?? null;
+}
+
+export function compareDocumentDrafts(
+  question: string,
+  files: ReadonlyArray<{ filename: string }>,
+): QuestionDraft[] | null {
+  if (files.length < 2 || !asksToCompareDocuments(question)) return null;
+  const claim = fileClaim(question);
+  if (!claim) return null;
+  const used = new Set<string>();
+  return files.slice(0, 5).map((file) => {
+    const filename = file.filename.trim() || "file";
+    const stem = filename.replace(/\.[^.]+$/, "") || filename;
+    return {
+      key: draftKey(stem, used),
+      type: "noul" as const,
+      instructions: `${filename} ${claim}`.replace(/\s+/g, " ").slice(0, 400),
+    };
+  });
+}
+
 export function asksAboutAttachment(question: string): boolean {
   const trimmed = question.trim();
   if (!trimmed) return false;
@@ -229,6 +303,7 @@ export function attributeAnswer(input: {
   text: string;
   filename?: string;
   document?: string;
+  documents?: ReadonlyArray<{ filename: string; text: string }>;
   snippets: SourceSnippet[];
 }): AnswerOrigin | undefined {
   const tokens = contentTokens(input.text);
@@ -238,7 +313,27 @@ export function attributeAnswer(input: {
     const hits = tokens.filter((token) => lower.includes(token)).length;
     return hits / tokens.length;
   };
-  const fileScore = input.document ? score(input.document) : 0;
+  const files = input.documents?.length
+    ? input.documents
+    : input.document
+      ? [{ filename: input.filename ?? "your file", text: input.document }]
+      : [];
+  const named = files.filter(
+    (file) => file.filename && input.text.includes(file.filename),
+  );
+  if (named.length === 1 && named[0]?.filename.trim()) {
+    return { kind: "file", title: named[0].filename.trim() };
+  }
+  let fileScore = 0;
+  let fileTitle = input.filename?.trim() || "your file";
+  for (const file of files) {
+    if (!file.text.trim()) continue;
+    const value = score(file.text);
+    if (value > fileScore) {
+      fileScore = value;
+      fileTitle = file.filename.trim() || "your file";
+    }
+  }
   let bestScore = 0;
   let bestSnippet: SourceSnippet | undefined;
   for (const snippet of input.snippets) {
@@ -248,8 +343,12 @@ export function attributeAnswer(input: {
       bestSnippet = snippet;
     }
   }
-  if (fileScore >= 0.6 && fileScore >= bestScore && input.document?.trim()) {
-    return { kind: "file", title: input.filename?.trim() || "your file" };
+  if (
+    fileScore >= 0.6 &&
+    fileScore >= bestScore &&
+    files.some((file) => file.text.trim())
+  ) {
+    return { kind: "file", title: fileTitle };
   }
   if (bestSnippet && bestScore >= 0.6 && bestScore > fileScore) {
     return { kind: "web", title: bestSnippet.title, url: bestSnippet.url };
@@ -260,9 +359,12 @@ export function attributeAnswer(input: {
 export function needsWebEvidence(
   question: string,
   document?: string,
-  options?: { image?: boolean },
+  options?: { image?: boolean; fileCount?: number },
 ): boolean {
   if (options?.image) return false;
+  if ((options?.fileCount ?? 0) > 1 && asksToCompareDocuments(question)) {
+    return false;
+  }
   if (!document?.trim()) return true;
   if (asksAboutAttachment(question)) return false;
   if (missingSubjects(question, document).length > 0) return true;

@@ -10,7 +10,7 @@ export function DropZone({ active }: DropZoneProps) {
   return (
     <div className="drop-overlay" role="status">
       <div className="drop-card">
-        <strong>Drop a file</strong>
+        <strong>Drop files</strong>
         <span>TXT, Markdown, CSV, JSON, HTML, PDF, DOCX, or an image</span>
       </div>
     </div>

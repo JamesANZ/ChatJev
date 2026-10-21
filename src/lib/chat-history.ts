@@ -10,7 +10,7 @@ export type StoredChat = {
   title: string;
   updatedAt: number;
   messages: ChatItem[];
-  document: DocumentContext | null;
+  documents: DocumentContext[];
 };
 
 export type ChatHistory = {
@@ -38,7 +38,13 @@ export function chatTitle(messages: ChatItem[]): string {
 export function prepareHistory(history: ChatHistory): ChatHistory {
   const chats = history.chats
     .filter((chat) => chat.messages.length > 0)
-    .map((chat) => ({ ...chat, title: chatTitle(chat.messages) }))
+    .map((chat) => ({
+      id: chat.id,
+      title: chatTitle(chat.messages),
+      updatedAt: chat.updatedAt,
+      messages: chat.messages,
+      documents: chat.documents,
+    }))
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, MAX_CHATS);
   const activeId = chats.some((chat) => chat.id === history.activeId)
@@ -115,16 +121,16 @@ export function appendMessage(
   return prepareHistory({ ...history, chats });
 }
 
-export function setChatDocument(
+export function setChatDocuments(
   history: ChatHistory,
   chatId: string,
-  document: DocumentContext | null,
+  documents: DocumentContext[],
   now = Date.now(),
 ): ChatHistory {
   return prepareHistory({
     ...history,
     chats: history.chats.map((chat) =>
-      chat.id === chatId ? { ...chat, document, updatedAt: now } : chat,
+      chat.id === chatId ? { ...chat, documents, updatedAt: now } : chat,
     ),
   });
 }
@@ -158,15 +164,33 @@ function parseChat(value: unknown): StoredChat | null {
   }
   if (!Array.isArray(chat.messages)) return null;
   const messages = chat.messages.filter(isChatItem);
-  const document = chat.document == null ? null : parseDocument(chat.document);
-  if (chat.document != null && !document) return null;
+  const documents = parseDocuments(chat);
+  if (!documents) return null;
   return {
     id: chat.id,
     title: typeof chat.title === "string" ? chat.title : chatTitle(messages),
     updatedAt: chat.updatedAt,
     messages,
-    document,
+    documents,
   };
+}
+
+function parseDocuments(chat: {
+  document?: unknown;
+  documents?: unknown;
+}): DocumentContext[] | null {
+  if (Array.isArray(chat.documents)) {
+    const documents: DocumentContext[] = [];
+    for (const item of chat.documents) {
+      const parsed = parseDocument(item);
+      if (!parsed) return null;
+      documents.push(parsed);
+    }
+    return documents;
+  }
+  if (chat.document == null) return [];
+  const document = parseDocument(chat.document);
+  return document ? [document] : null;
 }
 
 function parseDocument(value: unknown): DocumentContext | null {
