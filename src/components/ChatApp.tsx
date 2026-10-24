@@ -28,12 +28,6 @@ const SETUP_CODES = new Set([
   "missing_evidence",
 ]);
 
-const SUGGESTIONS = [
-  "Is this claim supported by recent sources?",
-  "What does the evidence actually say?",
-  "How confident should I be in this answer?",
-];
-
 const EMPTY_HISTORY: ChatHistory = { activeId: null, chats: [] };
 
 function nextId(): string {
@@ -81,10 +75,6 @@ export function ChatApp() {
   const [askNotice, setAskNotice] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [composerSeed, setComposerSeed] = useState<{
-    id: number;
-    text: string;
-  } | null>(null);
   const desktop = useDesktopLayout();
   const stageRef = useRef<HTMLDivElement>(null);
 
@@ -462,21 +452,6 @@ export function ChatApp() {
                   <p>ChatJev turns Jev’s result into a reply.</p>
                 </li>
               </ol>
-              <div className="suggestions">
-                {SUGGESTIONS.map((prompt) => (
-                  <button
-                    key={prompt}
-                    type="button"
-                    className="suggestion"
-                    disabled={busy}
-                    onClick={() =>
-                      setComposerSeed({ id: Date.now(), text: prompt })
-                    }
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
             </div>
           ) : (
             <div className="stage-inner">
@@ -493,7 +468,6 @@ export function ChatApp() {
             {error ? <p className="dock-error">{error}</p> : null}
             <MessageInput
               disabled={busy}
-              seed={composerSeed}
               placeholder={
                 documents.length > 1
                   ? "Ask about these files"

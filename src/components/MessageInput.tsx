@@ -9,16 +9,10 @@ import {
   type ReactNode,
 } from "react";
 
-type ComposerSeed = {
-  id: number;
-  text: string;
-};
-
 type MessageInputProps = {
   disabled?: boolean;
   placeholder?: string;
   attachment?: ReactNode;
-  seed?: ComposerSeed | null;
   onSend: (question: string) => void;
   onFile: (files: File[]) => void;
 };
@@ -30,7 +24,6 @@ export function MessageInput({
   disabled,
   placeholder = "Message ChatJev",
   attachment,
-  seed,
   onSend,
   onFile,
 }: MessageInputProps) {
@@ -39,20 +32,11 @@ export function MessageInput({
   const fileInput = useRef<HTMLInputElement>(null);
 
   useLayoutEffect(() => {
-    if (!seed) return;
-    setValue(seed.text);
-  }, [seed]);
-
-  useLayoutEffect(() => {
     const element = field.current;
     if (!element) return;
     element.style.height = "0px";
     element.style.height = `${Math.min(element.scrollHeight, 200)}px`;
-    if (!seed || element.value !== seed.text) return;
-    element.focus();
-    const end = seed.text.length;
-    element.setSelectionRange(end, end);
-  }, [value, seed]);
+  }, [value]);
 
   function submit() {
     const question = value.trim();
