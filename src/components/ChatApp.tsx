@@ -17,7 +17,6 @@ import {
   type ChatHistory,
 } from "@/lib/chat-history";
 import { ChatThread, type ChatItem } from "./ChatThread";
-import { AnswerSource } from "./VerdictCard";
 import { DropZone } from "./DropZone";
 import { FileChip } from "./FileChip";
 import { MessageInput } from "./MessageInput";
@@ -439,60 +438,6 @@ export function ChatApp() {
           {empty ? (
             <div className="hero">
               <h1>What should Jev judge?</h1>
-              <p className="hero-lead">
-                Chat with Jev in plain language. It scores sources instead of
-                writing the answer, so it typically cannot invent facts.
-              </p>
-              <ol className="hero-steps">
-                <li>
-                  <h2>Ask like a normal chatbot</h2>
-                  <p>
-                    An LLM and a web scraper turn your question into something
-                    Jev can judge.
-                  </p>
-                </li>
-                <li>
-                  <h2>Give Jev the sources</h2>
-                  <p>
-                    Attach one or more files. If they miss an answer, ChatJev
-                    looks that part up and shows where each answer came from.
-                  </p>
-                </li>
-                <li>
-                  <h2>Read the scores back</h2>
-                  <p>ChatJev turns Jev’s result into a reply.</p>
-                </li>
-              </ol>
-              <figure className="gap-example">
-                <figcaption>
-                  Example. capitals.txt states France and Spain. Italy is not in
-                  the file, so that answer is marked from the web.
-                </figcaption>
-                <ul>
-                  <li className="answer-row">
-                    <span>The capital of France is Paris.</span>
-                    <AnswerSource
-                      origin={{ kind: "file", title: "capitals.txt" }}
-                    />
-                  </li>
-                  <li className="answer-row">
-                    <span>The capital of Spain is Madrid.</span>
-                    <AnswerSource
-                      origin={{ kind: "file", title: "capitals.txt" }}
-                    />
-                  </li>
-                  <li className="answer-row">
-                    <span>The capital of Italy is Rome.</span>
-                    <AnswerSource
-                      origin={{
-                        kind: "web",
-                        title: "Italy",
-                        url: "https://example.com/italy",
-                      }}
-                    />
-                  </li>
-                </ul>
-              </figure>
               <div className="suggestions">
                 {SUGGESTIONS.map((prompt) => (
                   <button
@@ -548,9 +493,6 @@ export function ChatApp() {
               onSend={onSend}
               onFile={onFiles}
             />
-            <p className="fineprint">
-              Jev scores sources. It does not invent the answer.
-            </p>
           </div>
         </div>
       </div>
