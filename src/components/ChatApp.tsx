@@ -84,7 +84,8 @@ export function ChatApp() {
   const documents = active ? active.documents : draftDocuments;
 
   useEffect(() => {
-    setHistory(loadHistory(window.localStorage));
+    const loaded = loadHistory(window.localStorage);
+    setHistory({ ...loaded, activeId: null });
     setHydrated(true);
   }, []);
 
