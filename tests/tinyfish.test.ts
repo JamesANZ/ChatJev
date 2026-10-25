@@ -61,7 +61,7 @@ describe("searchTinyFish", () => {
       });
       expect(JSON.parse(String(init.body))).toEqual({
         provider: "tinyfish",
-        endpoint: "/search",
+        endpoint: "/free/search",
         input: { queryParams: { query, domain_type: "web" } },
       });
       expect(hits[index]).toEqual([

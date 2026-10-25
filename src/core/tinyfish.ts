@@ -119,7 +119,7 @@ export async function searchTinyFish(query: string): Promise<TinyFishHit[]> {
     },
     body: JSON.stringify({
       provider: "tinyfish",
-      endpoint: "/search",
+      endpoint: "/free/search",
       input: { queryParams: { query, domain_type: "web" } },
     }),
   });
