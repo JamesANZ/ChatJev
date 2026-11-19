@@ -13,7 +13,7 @@ type MessageInputProps = {
   disabled?: boolean;
   placeholder?: string;
   attachment?: ReactNode;
-  onSend: (question: string) => void;
+  onSend: (question: string) => void | boolean;
   onFile: (files: File[]) => void;
 };
 
@@ -41,7 +41,7 @@ export function MessageInput({
   function submit() {
     const question = value.trim();
     if (!question || disabled) return;
-    onSend(question);
+    if (onSend(question) === false) return;
     setValue("");
   }
 

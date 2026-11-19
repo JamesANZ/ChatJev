@@ -1,24 +1,10 @@
 "use client";
 
-import type {
-  AnswerOrigin,
-  AskResult,
-  JudgmentView,
-  Leaning,
-} from "@/core/types";
+import { judgmentMeter } from "@/core/judgment-meter";
+import type { AnswerOrigin, AskResult } from "@/core/types";
 
 type VerdictCardProps = {
   result: AskResult;
-};
-
-function primaryNoul(judgments: JudgmentView[]): JudgmentView | undefined {
-  return judgments.find((item) => item.type === "noul" && item.noul != null);
-}
-
-const LEANING_LABEL: Record<Leaning, string> = {
-  yes: "Yes",
-  no: "No",
-  unsure: "Unsure",
 };
 
 export function AnswerSource({ origin }: { origin: AnswerOrigin }) {
@@ -48,26 +34,21 @@ export function VerdictCard({ result }: VerdictCardProps) {
     return <p className="narration">{result.message}</p>;
   }
 
-  const primary = primaryNoul(result.judgments);
-  const choice = result.judgments.find((item) => item.type === "choice");
-  const leaning = primary?.leaning ?? choice?.leaning ?? "unsure";
-  const amount = primary?.noul ?? choice?.confidence ?? 0;
-  const width = `${Math.round(amount * 100)}%`;
-  const scored = Boolean(primary || choice);
+  const meter = judgmentMeter(result.judgments);
 
   return (
-    <section className={`verdict ${leaning}`}>
+    <section className={`verdict ${meter.kind === "none" ? "unsure" : meter.tone}`}>
       {result.narration ? (
         <p className="narration">{result.narration}</p>
       ) : null}
-      {scored || result.judgments.length > 0 ? (
+      {meter.kind !== "none" || result.judgments.length > 0 ? (
         <div className="score-panel">
-          {scored ? (
+          {meter.kind !== "none" ? (
             <>
               <div className="score-label">
-                <span className={`dot ${leaning}`} aria-hidden="true" />
-                <span>{LEANING_LABEL[leaning]}</span>
-                <span className="score-pct">{Math.round(amount * 100)}%</span>
+                <span className={`dot ${meter.tone}`} aria-hidden="true" />
+                <span className="score-caption">{meter.caption}</span>
+                <span className="score-pct">{meter.percent}%</span>
               </div>
               <div
                 className="meter"
@@ -75,9 +56,9 @@ export function VerdictCard({ result }: VerdictCardProps) {
                 aria-label="Confidence"
                 aria-valuemin={0}
                 aria-valuemax={100}
-                aria-valuenow={Math.round(amount * 100)}
+                aria-valuenow={meter.percent}
               >
-                <span style={{ width }} />
+                <span style={{ width: `${meter.percent}%` }} />
               </div>
             </>
           ) : null}

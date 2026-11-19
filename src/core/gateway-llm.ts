@@ -59,6 +59,21 @@ function asChatError(error: unknown): ChatJevError {
   return new ChatJevError(502, "llm_error", message);
 }
 
+export type GatherSettlement =
+  | { action: "use"; snippets: SourceSnippet[] }
+  | { action: "fail" };
+
+export function settleGather(input: {
+  snippets: SourceSnippet[];
+  failed: boolean;
+  hasDocument: boolean;
+}): GatherSettlement {
+  if (input.snippets.length > 0 || !input.failed || input.hasDocument) {
+    return { action: "use", snippets: input.snippets };
+  }
+  return { action: "fail" };
+}
+
 export function gatherSystem(search: boolean): string {
   return search
     ? [
@@ -144,10 +159,13 @@ export function createModelLlm(options: {
         }
       }
 
-      if (snippets.length === 0 && searchError && !input.document?.trim()) {
-        throw asChatError(searchError);
-      }
-      return snippets;
+      const settled = settleGather({
+        snippets,
+        failed: Boolean(searchError),
+        hasDocument: Boolean(input.document?.trim()),
+      });
+      if (settled.action === "fail") throw asChatError(searchError);
+      return settled.snippets;
     },
 
     async compile(input: CompileInput): Promise<QuestionDraft[]> {

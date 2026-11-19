@@ -255,6 +255,46 @@ function leaningFromNoul(noul: number): Leaning {
   return "unsure";
 }
 
+export type ChoiceReading =
+  | { kind: "silent"; probability: number }
+  | {
+      kind: "split";
+      probability: number;
+      other: string;
+      otherProbability: number;
+    }
+  | { kind: "confident"; probability: number }
+  | { kind: "leaning"; probability: number };
+
+export function readChoice(input: {
+  choice: string;
+  label: string;
+  probability: number;
+  runnerUp?: { label: string; probability: number };
+}): ChoiceReading {
+  if (
+    input.choice === "abstain" ||
+    /does not contain enough information/i.test(input.label)
+  ) {
+    return { kind: "silent", probability: input.probability };
+  }
+  if (
+    input.runnerUp &&
+    input.probability - input.runnerUp.probability < 0.12
+  ) {
+    return {
+      kind: "split",
+      probability: input.probability,
+      other: input.runnerUp.label,
+      otherProbability: input.runnerUp.probability,
+    };
+  }
+  if (input.probability >= UNSURE_HIGH) {
+    return { kind: "confident", probability: input.probability };
+  }
+  return { kind: "leaning", probability: input.probability };
+}
+
 function cleanLabel(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const label = value.trim();
@@ -430,32 +470,35 @@ export function viewJudgment(
     const label = question.criteria[answer.choice] ?? answer.choice;
     const probability =
       answer.probabilities[answer.choice] ?? answer.confidence;
-    const runnerUp = Object.entries(answer.probabilities)
+    const runner = Object.entries(answer.probabilities)
       .filter(([option]) => option !== answer.choice)
       .sort((left, right) => right[1] - left[1])[0];
-    const silent =
-      answer.choice === "abstain" ||
-      /does not contain enough information/i.test(label);
-    const split = Boolean(
-      runnerUp && probability - runnerUp[1] < 0.12 && !silent,
-    );
-    const other = runnerUp
-      ? (question.criteria[runnerUp[0]] ?? runnerUp[0])
-      : "";
-    const line = silent
-      ? `Jev thinks the evidence is silent on “${question.instructions}” with a ${percent(probability)} probability.`
-      : split
-        ? `Jev is split on “${question.instructions}”: “${label}” (${percent(probability)}) or “${other}” (${percent(runnerUp?.[1] ?? 0)}).`
-        : probability >= UNSURE_HIGH
-          ? `Jev thinks “${label}” with a ${percent(probability)} probability.`
-          : `Jev leans toward “${label}” with a ${percent(probability)} probability.`;
+    const reading = readChoice({
+      choice: answer.choice,
+      label,
+      probability,
+      runnerUp: runner
+        ? {
+            label: question.criteria[runner[0]] ?? runner[0],
+            probability: runner[1],
+          }
+        : undefined,
+    });
+    const line =
+      reading.kind === "silent"
+        ? `Jev thinks the evidence is silent on “${question.instructions}” with a ${percent(reading.probability)} probability.`
+        : reading.kind === "split"
+          ? `Jev is split on “${question.instructions}”: “${label}” (${percent(reading.probability)}) or “${reading.other}” (${percent(reading.otherProbability)}).`
+          : reading.kind === "confident"
+            ? `Jev thinks “${label}” with a ${percent(reading.probability)} probability.`
+            : `Jev leans toward “${label}” with a ${percent(reading.probability)} probability.`;
     return {
       key,
       instructions: question.instructions,
       type: "choice",
       choice: answer.choice,
       confidence: probability,
-      leaning: silent || split || probability < UNSURE_HIGH ? "unsure" : "yes",
+      leaning: reading.kind === "confident" ? "yes" : "unsure",
       label,
       line,
     };

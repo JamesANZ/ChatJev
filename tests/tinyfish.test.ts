@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatJevError } from "../src/core/types";
-import { searchTinyFish } from "../src/core/tinyfish";
+import {
+  readPolledRun,
+  readSubmittedRun,
+  searchTinyFish,
+} from "../src/core/tinyfish";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -166,5 +170,68 @@ describe("searchTinyFish", () => {
     );
 
     await expect(searchTinyFish("broken")).rejects.toBeInstanceOf(ChatJevError);
+  });
+
+  it("polls a run that is still going on a 200 response", async () => {
+    process.env.MONID_API_KEY = "test-key";
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ runId: "run-2", status: "RUNNING" }, 200),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ runId: "run-2", status: "RUNNING" }, 200),
+      )
+      .mockResolvedValueOnce(jsonResponse(completed("maps", "Maps")));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const hits = await searchTinyFish("maps");
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(hits[0]?.title).toBe("Maps");
+  });
+
+  it("does not treat an accepted run without an id as finished", async () => {
+    process.env.MONID_API_KEY = "test-key";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse({ status: "RUNNING" }, 202),
+      ),
+    );
+
+    await expect(searchTinyFish("lost")).rejects.toMatchObject({
+      status: 502,
+      code: "search_error",
+    });
+  });
+});
+
+describe("TinyFish run phases", () => {
+  it("separates accepted, running, completed, failed, and rejected runs", () => {
+    expect(
+      readSubmittedRun(202, { runId: "run-1", status: "RUNNING" }),
+    ).toEqual({ phase: "running", runId: "run-1" });
+    expect(readSubmittedRun(202, { status: "RUNNING" })).toEqual({
+      phase: "invalid",
+    });
+    expect(
+      readSubmittedRun(200, {
+        status: "COMPLETED",
+        output: { results: [] },
+        providerResponse: { httpStatus: 500 },
+      }),
+    ).toEqual({ phase: "failed", status: "FAILED", providerStatus: 500 });
+    expect(readSubmittedRun(500, {})).toEqual({
+      phase: "rejected",
+      httpStatus: 500,
+    });
+    expect(readPolledRun(200, { status: "PENDING" })).toEqual({
+      phase: "pending",
+    });
+    expect(readPolledRun(200, { status: "BLOCKED" })).toEqual({
+      phase: "failed",
+      status: "BLOCKED",
+    });
   });
 });

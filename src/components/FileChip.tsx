@@ -4,10 +4,11 @@ import type { SessionSummary } from "@/core/types";
 
 type FileChipProps = {
   session: SessionSummary;
+  locked?: boolean;
   onClear: () => void;
 };
 
-export function FileChip({ session, onClear }: FileChipProps) {
+export function FileChip({ session, locked, onClear }: FileChipProps) {
   return (
     <div className="file-chip">
       {session.image ? (
@@ -52,6 +53,7 @@ export function FileChip({ session, onClear }: FileChipProps) {
         type="button"
         className="file-remove"
         onClick={onClear}
+        disabled={locked}
         aria-label={`Remove ${session.filename}`}
       >
         <svg

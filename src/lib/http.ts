@@ -5,10 +5,10 @@ import { createHeuristicLlm, type LlmClient } from "@/core/llm";
 import {
   ChatJevError,
   MAX_ATTACHMENTS,
-  parseAttachedImage,
   type DocumentContext,
   type JevClient,
 } from "@/core/types";
+import { readIncomingDocument } from "./incoming-document";
 
 function json(body: unknown, status = 200): Response {
   return Response.json(body, { status });
@@ -44,48 +44,6 @@ export async function handleUpload(request: Request): Promise<Response> {
   } catch (error) {
     return errorResponse(error);
   }
-}
-
-function invalidDocument(message: string): Response {
-  return json({ error: message, code: "invalid_document" }, 400);
-}
-
-function parseAskDocument(
-  value: unknown,
-  index: number,
-): DocumentContext | null | Response {
-  if (!value || typeof value !== "object") {
-    return invalidDocument("Send both the document text and filename.");
-  }
-  const item = value as Partial<DocumentContext>;
-  const text = item.text;
-  const filename = item.filename;
-  const rawImage = item.image;
-  const image = rawImage == null ? undefined : parseAttachedImage(rawImage);
-  if (rawImage != null && !image) {
-    return invalidDocument("Send a prepared JPEG or PNG with the document.");
-  }
-  const hasText = typeof text === "string" && text.length > 0;
-  const hasName = typeof filename === "string" && filename.length > 0;
-  const hasImage = Boolean(image);
-  if (!hasText && !hasName && !hasImage) return null;
-  if (
-    (hasText && !hasName) ||
-    (hasImage && !hasName) ||
-    (!hasText && !hasImage && hasName)
-  ) {
-    return invalidDocument("Send both the document text and filename.");
-  }
-  const documentText = hasText ? text : `Attached image: ${filename}.`;
-  return {
-    id: item.id ?? `client-${index + 1}`,
-    filename: filename ?? "",
-    mimeType: item.mimeType ?? (hasImage ? "image/jpeg" : "text/plain"),
-    text: documentText,
-    charCount: documentText.length,
-    truncated: Boolean(item.truncated),
-    image,
-  };
 }
 
 export async function handleAsk(
@@ -128,9 +86,14 @@ export async function handleAsk(
 
     const documents: DocumentContext[] = [];
     for (const [index, item] of listed.entries()) {
-      const parsed = parseAskDocument(item, index);
-      if (parsed instanceof Response) return parsed;
-      if (parsed) documents.push(parsed);
+      const parsed = readIncomingDocument(item, index);
+      if (parsed.status === "invalid") {
+        return json(
+          { error: parsed.message, code: "invalid_document" },
+          400,
+        );
+      }
+      if (parsed.status === "ready") documents.push(parsed.document);
     }
 
     return json(

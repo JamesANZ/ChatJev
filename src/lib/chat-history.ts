@@ -63,32 +63,92 @@ export function loadHistory(storage: HistoryStorage): ChatHistory {
   }
 }
 
+export type PersistStep =
+  | { step: "drop_oldest"; history: ChatHistory }
+  | { step: "strip_images"; history: ChatHistory }
+  | { step: "give_up"; history: ChatHistory };
+
+export type HistoryCommit = {
+  history: ChatHistory;
+  persisted: boolean;
+};
+
+function withoutImages(history: ChatHistory): ChatHistory | null {
+  if (
+    !history.chats.some((chat) => chat.documents.some((item) => item.image))
+  ) {
+    return null;
+  }
+  return {
+    ...history,
+    chats: history.chats.map((chat) => ({
+      ...chat,
+      documents: chat.documents.map((item) => {
+        if (!item.image) return item;
+        const { image: _image, ...rest } = item;
+        return rest;
+      }),
+    })),
+  };
+}
+
+export function persistAfterQuota(
+  history: ChatHistory,
+  imagesStripped: boolean,
+): PersistStep {
+  if (history.chats.length > 1) {
+    const chats = history.chats.slice(0, -1);
+    return {
+      step: "drop_oldest",
+      history: {
+        activeId: chats.some((chat) => chat.id === history.activeId)
+          ? history.activeId
+          : null,
+        chats,
+      },
+    };
+  }
+  if (!imagesStripped) {
+    const stripped = withoutImages(history);
+    if (stripped) return { step: "strip_images", history: stripped };
+  }
+  return { step: "give_up", history };
+}
+
+export function commitHistory(
+  history: ChatHistory,
+  storage: HistoryStorage,
+): HistoryCommit {
+  let imagesStripped = false;
+  let next = prepareHistory(history);
+  if (next.chats.length === 0) {
+    try {
+      storage.removeItem(HISTORY_KEY);
+    } catch {
+      return { history: next, persisted: false };
+    }
+    return { history: next, persisted: true };
+  }
+  while (next.chats.length > 0) {
+    try {
+      storage.setItem(HISTORY_KEY, JSON.stringify(next));
+      return { history: next, persisted: true };
+    } catch (error) {
+      if (!isQuotaError(error)) return { history: next, persisted: false };
+      const step = persistAfterQuota(next, imagesStripped);
+      if (step.step === "give_up") return { history: next, persisted: false };
+      if (step.step === "strip_images") imagesStripped = true;
+      next = step.history;
+    }
+  }
+  return { history: next, persisted: false };
+}
+
 export function saveHistory(
   history: ChatHistory,
   storage: HistoryStorage,
 ): ChatHistory {
-  let next = prepareHistory(history);
-  while (next.chats.length > 0) {
-    try {
-      storage.setItem(HISTORY_KEY, JSON.stringify(next));
-      return next;
-    } catch (error) {
-      if (!isQuotaError(error) || next.chats.length === 1) return next;
-      const chats = next.chats.slice(0, -1);
-      next = {
-        activeId: chats.some((chat) => chat.id === next.activeId)
-          ? next.activeId
-          : null,
-        chats,
-      };
-    }
-  }
-  try {
-    storage.removeItem(HISTORY_KEY);
-  } catch {
-    return next;
-  }
-  return next;
+  return commitHistory(history, storage).history;
 }
 
 export function saveChat(history: ChatHistory, chat: StoredChat): ChatHistory {

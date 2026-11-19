@@ -14,6 +14,11 @@ import {
 import { examDrafts } from "./exam";
 import { MODEL_FALLBACK_WARNING, SEARCH_MISSED_WARNING } from "./setup";
 import {
+  advanceFormulation,
+  formulationFailure,
+  type FormulationPhase,
+} from "./formulation";
+import {
   createHeuristicLlm,
   FORMULATION_ATTEMPTS,
   formulationStrategy,
@@ -40,24 +45,36 @@ import {
   type SourceSnippet,
 } from "./types";
 
-function retryableFormulationError(error: unknown): boolean {
-  if (!(error instanceof ChatJevError)) return true;
-  if (
-    error.code === "missing_api_key" ||
-    error.code === "missing_llm_key" ||
-    error.status === 401 ||
-    error.status === 403
-  ) {
-    return false;
+export type ImageRead =
+  | { action: "passthrough" }
+  | { action: "replace"; reading: string }
+  | { action: "unread" }
+  | { action: "stop" };
+
+function visionAuthFailure(error: unknown): boolean {
+  return (
+    error instanceof ChatJevError &&
+    (error.code === "missing_llm_key" ||
+      error.status === 401 ||
+      error.status === 403)
+  );
+}
+
+export function imageRead(input: {
+  hasImage: boolean;
+  described: boolean;
+  reading: string;
+  error?: unknown;
+}): ImageRead {
+  if (!input.hasImage || !input.described) return { action: "passthrough" };
+  if (input.error) {
+    return visionAuthFailure(input.error)
+      ? { action: "stop" }
+      : { action: "unread" };
   }
-  if (
-    /timeout|unavailable|rate limit|too many requests|overloaded|econn|fetch failed|network/i.test(
-      error.message,
-    )
-  ) {
-    return false;
-  }
-  return error.code === "jev_error" || error.code === "llm_error";
+  const reading = input.reading.trim();
+  if (reading) return { action: "replace", reading };
+  return { action: "passthrough" };
 }
 
 function failureNote(reason: string, attempt: number): string {
@@ -202,36 +219,38 @@ export async function askDocument(
   const readings: string[] = [];
   const prepared: DocumentContext[] = [];
   for (const item of attached) {
-    if (!item.image || !llm.describeImage) {
-      prepared.push(item);
-      continue;
-    }
-    try {
-      const reading = (
-        await llm.describeImage({
+    let reading = "";
+    let error: unknown;
+    if (item.image && llm.describeImage) {
+      try {
+        reading = await llm.describeImage({
           filename: item.filename,
           question: trimmed,
           image: item.image,
           history: prior,
-        })
-      ).trim();
-      if (reading) {
-        readings.push(soleImage ? reading : `${item.filename}: ${reading}`);
-        prepared.push({
-          ...item,
-          text: readingText(item.filename, reading, soleImage),
         });
-        continue;
+      } catch (err) {
+        error = err;
       }
-    } catch (error) {
-      if (
-        error instanceof ChatJevError &&
-        (error.code === "missing_llm_key" ||
-          error.status === 401 ||
-          error.status === 403)
-      ) {
-        throw error;
-      }
+    }
+    const outcome = imageRead({
+      hasImage: Boolean(item.image),
+      described: Boolean(llm.describeImage),
+      reading,
+      error,
+    });
+    if (outcome.action === "stop") throw error;
+    if (outcome.action === "replace") {
+      readings.push(
+        soleImage ? outcome.reading : `${item.filename}: ${outcome.reading}`,
+      );
+      prepared.push({
+        ...item,
+        text: readingText(item.filename, outcome.reading, soleImage),
+      });
+      continue;
+    }
+    if (outcome.action === "unread") {
       visionWarning =
         "The vision model could not read an image, so the questions were written without a description of it. Jev still received a single picture when only one image is attached.";
     }
@@ -334,10 +353,10 @@ export async function askDocument(
       });
     }
   }
-  let feedback: string | undefined;
-  let lastError: unknown;
+  let phase: FormulationPhase = { name: "attempt", attempt: 0 };
 
-  for (let attempt = 0; attempt < FORMULATION_ATTEMPTS; attempt += 1) {
+  while (phase.name === "attempt") {
+    const { attempt, feedback } = phase;
     const strategy = formulationStrategy(attempt);
     let drafts;
     try {
@@ -354,14 +373,19 @@ export async function askDocument(
         history: prior,
       });
     } catch (error) {
-      if (!retryableFormulationError(error)) throw error;
-      lastError = error;
-      feedback = failureNote(
-        error instanceof Error
-          ? error.message
-          : "The question list was not valid.",
+      if (formulationFailure(error) === "fatal") throw error;
+      phase = advanceFormulation({
         attempt,
-      );
+        attempts: FORMULATION_ATTEMPTS,
+        feedback: failureNote(
+          error instanceof Error
+            ? error.message
+            : "The question list was not valid.",
+          attempt,
+        ),
+        error,
+        lastError: phase.lastError,
+      });
       continue;
     }
 
@@ -371,12 +395,17 @@ export async function askDocument(
       }),
     );
     if (!validated.ok || Object.keys(validated.questions).length === 0) {
-      feedback = failureNote(
-        validated.ok
-          ? "Return at least one closed question. An empty list cannot be scored."
-          : validated.error,
+      phase = advanceFormulation({
         attempt,
-      );
+        attempts: FORMULATION_ATTEMPTS,
+        feedback: failureNote(
+          validated.ok
+            ? "Return at least one closed question. An empty list cannot be scored."
+            : validated.error,
+          attempt,
+        ),
+        lastError: phase.lastError,
+      });
       continue;
     }
 
@@ -387,16 +416,23 @@ export async function askDocument(
         warning: askWarning || undefined,
       });
     } catch (error) {
-      if (!retryableFormulationError(error)) throw error;
-      lastError = error;
-      feedback = failureNote(
-        error instanceof Error
-          ? error.message
-          : "Jev could not score that formulation.",
+      if (formulationFailure(error) === "fatal") throw error;
+      phase = advanceFormulation({
         attempt,
-      );
+        attempts: FORMULATION_ATTEMPTS,
+        feedback: failureNote(
+          error instanceof Error
+            ? error.message
+            : "Jev could not score that formulation.",
+          attempt,
+        ),
+        error,
+        lastError: phase.lastError,
+      });
     }
   }
+
+  let lastError = phase.lastError;
 
   const fallback = validateQuestions(
     repairDrafts(
@@ -416,7 +452,7 @@ export async function askDocument(
         warning: [MODEL_FALLBACK_WARNING, askWarning].filter(Boolean).join(" "),
       });
     } catch (error) {
-      if (!retryableFormulationError(error)) throw error;
+      if (formulationFailure(error) === "fatal") throw error;
       lastError = error;
     }
   }

@@ -3,8 +3,7 @@ import { ChatJevError, type SourceSnippet } from "./types";
 const MONID_BASE = "https://api.monid.ai";
 const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 20_000;
-const TERMINAL = new Set([
-  "COMPLETED",
+const FAILURE = new Set([
   "FAILED",
   "BLOCKED",
   "STOPPED",
@@ -12,17 +11,32 @@ const TERMINAL = new Set([
   "TIMED_OUT",
 ]);
 
+const OPEN = new Set(["RUNNING", "PENDING", "ACCEPTED", "QUEUED"]);
+
+type FailedRun = {
+  phase: "failed";
+  status: string;
+  providerStatus?: number;
+};
+
+export type TinyFishPhase =
+  | { phase: "accepted"; runId: string }
+  | { phase: "running"; runId: string }
+  | { phase: "completed"; output: unknown }
+  | FailedRun
+  | { phase: "rejected"; httpStatus: number }
+  | { phase: "invalid" };
+
+export type PolledRun =
+  | { phase: "pending" }
+  | { phase: "completed"; output: unknown }
+  | FailedRun
+  | { phase: "rejected"; httpStatus: number };
+
 export type TinyFishHit = {
   title: string;
   url: string;
   snippet: string;
-};
-
-type MonidRun = {
-  runId?: string;
-  status?: string;
-  output?: unknown;
-  providerResponse?: { httpStatus?: number; error?: unknown };
 };
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -66,23 +80,106 @@ function hitsFromOutput(output: unknown): TinyFishHit[] {
   return hits;
 }
 
-async function pollRun(runId: string, apiKey: string): Promise<MonidRun> {
+function runStatus(body: Record<string, unknown>): string {
+  return typeof body.status === "string" ? body.status.trim().toUpperCase() : "";
+}
+
+function runIdOf(body: Record<string, unknown>): string {
+  return typeof body.runId === "string" ? body.runId : "";
+}
+
+function providerStatus(body: Record<string, unknown>): number | undefined {
+  const provider = asRecord(body.providerResponse);
+  return typeof provider.httpStatus === "number" ? provider.httpStatus : undefined;
+}
+
+function completedOrProviderFailure(
+  body: Record<string, unknown>,
+): Extract<TinyFishPhase, { phase: "completed" | "failed" }> {
+  const httpStatus = providerStatus(body) ?? 200;
+  if (httpStatus >= 400) {
+    return { phase: "failed", status: "FAILED", providerStatus: httpStatus };
+  }
+  return { phase: "completed", output: body.output };
+}
+
+export function readSubmittedRun(
+  httpStatus: number,
+  body: unknown,
+): TinyFishPhase {
+  if (httpStatus >= 400) return { phase: "rejected", httpStatus };
+  const record = asRecord(body);
+  const status = runStatus(record);
+  const runId = runIdOf(record);
+  if (runId && (httpStatus === 202 || OPEN.has(status))) {
+    return status === "RUNNING" || status === "PENDING"
+      ? { phase: "running", runId }
+      : { phase: "accepted", runId };
+  }
+  if (status === "COMPLETED" || (status === "" && httpStatus !== 202)) {
+    return completedOrProviderFailure(record);
+  }
+  if (FAILURE.has(status)) return { phase: "failed", status };
+  return { phase: "invalid" };
+}
+
+export function readPolledRun(httpStatus: number, body: unknown): PolledRun {
+  if (httpStatus >= 400) return { phase: "rejected", httpStatus };
+  const record = asRecord(body);
+  const status = runStatus(record);
+  if (status === "COMPLETED") {
+    const settled = completedOrProviderFailure(record);
+    return settled.phase === "completed"
+      ? { phase: "completed", output: settled.output }
+      : settled;
+  }
+  if (FAILURE.has(status)) return { phase: "failed", status };
+  return { phase: "pending" };
+}
+
+function searchFailure(phase: TinyFishPhase | PolledRun): ChatJevError {
+  if (phase.phase === "rejected") {
+    return new ChatJevError(
+      502,
+      "search_error",
+      `TinyFish search failed (${phase.httpStatus}).`,
+    );
+  }
+  if (phase.phase === "failed") {
+    const detail =
+      phase.providerStatus != null && phase.providerStatus >= 400
+        ? `failed (${phase.providerStatus})`
+        : phase.status.toLowerCase();
+    return new ChatJevError(
+      502,
+      "search_error",
+      `TinyFish search ${detail}.`,
+    );
+  }
+  return new ChatJevError(
+    502,
+    "search_error",
+    "TinyFish search did not return a run.",
+  );
+}
+
+async function pollRun(runId: string, apiKey: string): Promise<PolledRun> {
   const deadline = Date.now() + POLL_TIMEOUT_MS;
   while (Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
     const response = await fetch(`${MONID_BASE}/v1/runs/${runId}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
-    const body = asRecord(await readJson(response));
-    if (!response.ok) {
+    const body = await readJson(response);
+    const phase = readPolledRun(response.status, body);
+    if (phase.phase === "rejected") {
       throw new ChatJevError(
         502,
         "search_error",
         `TinyFish search status check failed (${response.status}).`,
       );
     }
-    const status = typeof body.status === "string" ? body.status : "";
-    if (TERMINAL.has(status)) return body as MonidRun;
+    if (phase.phase !== "pending") return phase;
   }
   throw new ChatJevError(
     502,
@@ -123,32 +220,12 @@ export async function searchTinyFish(query: string): Promise<TinyFishHit[]> {
       input: { queryParams: { query, domain_type: "web" } },
     }),
   });
-  let result = asRecord(await readJson(response)) as MonidRun;
-  if (response.status === 202 && typeof result.runId === "string") {
-    result = await pollRun(result.runId, apiKey);
-  } else if (!response.ok) {
-    throw new ChatJevError(
-      502,
-      "search_error",
-      `TinyFish search failed (${response.status}).`,
-    );
+  const phase = readSubmittedRun(response.status, await readJson(response));
+  if (phase.phase === "accepted" || phase.phase === "running") {
+    const polled = await pollRun(phase.runId, apiKey);
+    if (polled.phase === "completed") return hitsFromOutput(polled.output);
+    throw searchFailure(polled);
   }
-
-  const status = result.status ?? "COMPLETED";
-  if (status !== "COMPLETED") {
-    throw new ChatJevError(
-      502,
-      "search_error",
-      `TinyFish search ${status.toLowerCase()}.`,
-    );
-  }
-  const httpStatus = result.providerResponse?.httpStatus ?? 200;
-  if (httpStatus >= 400) {
-    throw new ChatJevError(
-      502,
-      "search_error",
-      `TinyFish search failed (${httpStatus}).`,
-    );
-  }
-  return hitsFromOutput(result.output);
+  if (phase.phase === "completed") return hitsFromOutput(phase.output);
+  throw searchFailure(phase);
 }

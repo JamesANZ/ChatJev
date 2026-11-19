@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { classifyQuestion, isClosedJudgment } from "../src/core/classify";
+import {
+  classifyQuestion,
+  decideJudgment,
+  isClosedJudgment,
+} from "../src/core/classify";
 import {
   MEDICAL_QUESTION,
   openEndedClassification,
@@ -24,6 +28,8 @@ describe("classifyQuestion", () => {
 
     const result = await classifyQuestion(client, MEDICAL_QUESTION);
     expect(result.kind).toBe("judgment");
+    expect(result.decision).toBe("closed");
+    expect(result.decision).toBe(decideJudgment(result.kind, result.noul));
     expect(isClosedJudgment(result)).toBe(true);
     expect(client.calls[0]?.state).toEqual({ user_question: MEDICAL_QUESTION });
   });
@@ -37,6 +43,7 @@ describe("classifyQuestion", () => {
     ]) {
       const result = await classifyQuestion(client, question);
       expect(result.kind).toBe("open_ended");
+      expect(result.decision).toBe("open");
       expect(isClosedJudgment(result)).toBe(false);
     }
   });
@@ -57,6 +64,13 @@ describe("classifyQuestion", () => {
     });
 
     const result = await classifyQuestion(client, "is this interesting?");
+    expect(result.decision).toBe("uncertain");
     expect(isClosedJudgment(result)).toBe(false);
+  });
+
+  it("treats the threshold as closed and anything under it as uncertain", () => {
+    expect(decideJudgment("judgment", 0.6)).toBe("closed");
+    expect(decideJudgment("judgment", 0.59)).toBe("uncertain");
+    expect(decideJudgment("open_ended", 0.99)).toBe("open");
   });
 });

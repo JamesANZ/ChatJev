@@ -356,19 +356,38 @@ export function attributeAnswer(input: {
   return undefined;
 }
 
+export type EvidencePlan =
+  | { source: "image" }
+  | { source: "files" }
+  | { source: "web"; reason: "no_document" | "missing_subject" | "uncovered" }
+  | { source: "document" };
+
+export function planEvidence(
+  question: string,
+  document?: string,
+  options?: { image?: boolean; fileCount?: number },
+): EvidencePlan {
+  if (options?.image) return { source: "image" };
+  if ((options?.fileCount ?? 0) > 1 && asksToCompareDocuments(question)) {
+    return { source: "files" };
+  }
+  if (!document?.trim()) return { source: "web", reason: "no_document" };
+  if (asksAboutAttachment(question)) return { source: "document" };
+  if (missingSubjects(question, document).length > 0) {
+    return { source: "web", reason: "missing_subject" };
+  }
+  if (!documentCovers(question, document)) {
+    return { source: "web", reason: "uncovered" };
+  }
+  return { source: "document" };
+}
+
 export function needsWebEvidence(
   question: string,
   document?: string,
   options?: { image?: boolean; fileCount?: number },
 ): boolean {
-  if (options?.image) return false;
-  if ((options?.fileCount ?? 0) > 1 && asksToCompareDocuments(question)) {
-    return false;
-  }
-  if (!document?.trim()) return true;
-  if (asksAboutAttachment(question)) return false;
-  if (missingSubjects(question, document).length > 0) return true;
-  return !documentCovers(question, document);
+  return planEvidence(question, document, options).source === "web";
 }
 
 export function claimProposition(question: string): string {

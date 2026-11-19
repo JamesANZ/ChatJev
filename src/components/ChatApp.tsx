@@ -9,13 +9,27 @@ import {
 import { askAttachedDocument, uploadDocument } from "@/lib/client";
 import {
   appendMessage,
+  commitHistory,
   deleteChat,
   loadHistory,
   saveChat,
-  saveHistory,
   setChatDocuments,
   type ChatHistory,
 } from "@/lib/chat-history";
+import {
+  beginAsk,
+  beginUpload,
+  composerBusy,
+  dragEnter,
+  dragLeave,
+  dragReset,
+  finishActivity,
+  keepDraftAttachments,
+  showPending,
+  sidebarMode,
+  type ChatActivity,
+  type DragPhase,
+} from "@/lib/chat-session";
 import { ChatThread, type ChatItem } from "./ChatThread";
 import { DropZone } from "./DropZone";
 import { FileChip } from "./FileChip";
@@ -68,20 +82,37 @@ export function ChatApp() {
   const [history, setHistory] = useState<ChatHistory>(EMPTY_HISTORY);
   const [draftDocuments, setDraftDocuments] = useState<DocumentContext[]>([]);
   const [hydrated, setHydrated] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [pendingChatId, setPendingChatId] = useState<string | null>(null);
+  const [activity, setActivity] = useState<ChatActivity>({ status: "idle" });
   const [error, setError] = useState<string | null>(null);
   const [setupNotices, setSetupNotices] = useState<string[]>([]);
   const [askNotice, setAskNotice] = useState<string | null>(null);
-  const [dragging, setDragging] = useState(false);
+  const [drag, setDrag] = useState<DragPhase>({ status: "idle" });
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const desktop = useDesktopLayout();
   const stageRef = useRef<HTMLDivElement>(null);
+  const activityRef = useRef<ChatActivity>({ status: "idle" });
+  const dragRef = useRef<DragPhase>({ status: "idle" });
 
   const active =
     history.chats.find((chat) => chat.id === history.activeId) ?? null;
   const messages = active?.messages ?? [];
   const documents = active ? active.documents : draftDocuments;
+  const busy = composerBusy(activity);
+  const sidebar = sidebarMode({
+    hasHistory: history.chats.length > 0,
+    desktop,
+    drawer: sidebarOpen ? "open" : "closed",
+  });
+
+  function commitActivity(next: ChatActivity) {
+    activityRef.current = next;
+    setActivity(next);
+  }
+
+  function commitDrag(next: DragPhase) {
+    dragRef.current = next;
+    setDrag(next);
+  }
 
   useEffect(() => {
     const loaded = loadHistory(window.localStorage);
@@ -91,17 +122,28 @@ export function ChatApp() {
 
   useEffect(() => {
     if (!hydrated) return;
-    saveHistory(history, window.localStorage);
+    const saved = commitHistory(history, window.localStorage);
+    if (
+      saved.persisted &&
+      JSON.stringify(saved.history) !== JSON.stringify(history)
+    ) {
+      setHistory(saved.history);
+    }
   }, [history, hydrated]);
 
   useEffect(() => {
-    if (!sidebarOpen) return;
+    if (sidebar.kind === "absent" && sidebarOpen) setSidebarOpen(false);
+  }, [sidebar.kind, sidebarOpen]);
+
+  const drawerOpen = sidebar.kind === "drawer" && sidebar.open;
+  useEffect(() => {
+    if (!drawerOpen) return;
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") setSidebarOpen(false);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sidebarOpen]);
+  }, [drawerOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -128,55 +170,66 @@ export function ChatApp() {
   }, [messages, busy]);
 
   async function onFiles(files: File[]) {
-    if (busy || files.length === 0) return;
+    const started = beginUpload(activityRef.current, active?.id ?? null);
+    if (!started || files.length === 0) return;
+    commitActivity(started);
     const room = MAX_ATTACHMENTS - documents.length;
     if (room <= 0) {
       setError(`Attach up to ${MAX_ATTACHMENTS} files.`);
+      commitActivity(finishActivity(activityRef.current, started));
       return;
     }
     const batch = files.slice(0, room);
-    const chatId = active?.id ?? null;
+    const chatId = started.chatId;
     setError(null);
-    setBusy(true);
-    const settled = await Promise.allSettled(
-      batch.map((file) => uploadDocument(file)),
-    );
-    const uploaded = settled.flatMap((result) =>
-      result.status === "fulfilled" ? [result.value] : [],
-    );
-    const failure = settled.find((result) => result.status === "rejected");
-    if (uploaded.length > 0) {
-      if (chatId) {
-        setHistory((current) => {
-          const existing =
-            current.chats.find((chat) => chat.id === chatId)?.documents ?? [];
-          return setChatDocuments(current, chatId, [...existing, ...uploaded]);
-        });
-      } else {
-        setDraftDocuments((current) => [...current, ...uploaded]);
+    try {
+      const settled = await Promise.allSettled(
+        batch.map((file) => uploadDocument(file)),
+      );
+      const uploaded = settled.flatMap((result) =>
+        result.status === "fulfilled" ? [result.value] : [],
+      );
+      const failure = settled.find((result) => result.status === "rejected");
+      if (uploaded.length > 0) {
+        if (chatId) {
+          setHistory((current) => {
+            const existing =
+              current.chats.find((chat) => chat.id === chatId)?.documents ??
+              [];
+            return setChatDocuments(current, chatId, [
+              ...existing,
+              ...uploaded,
+            ]);
+          });
+        } else {
+          setDraftDocuments((current) => [...current, ...uploaded]);
+        }
+        setAskNotice(null);
       }
-      setAskNotice(null);
+      const notes: string[] = [];
+      if (files.length > room) {
+        notes.push(
+          `Attach up to ${MAX_ATTACHMENTS} files. Extra files were left out.`,
+        );
+      }
+      if (failure?.status === "rejected") {
+        notes.push(
+          failure.reason instanceof Error
+            ? failure.reason.message
+            : "Could not attach that document.",
+        );
+      }
+      setError(notes.join(" ") || null);
+    } finally {
+      commitActivity(finishActivity(activityRef.current, started));
     }
-    const notes: string[] = [];
-    if (files.length > room) {
-      notes.push(
-        `Attach up to ${MAX_ATTACHMENTS} files. Extra files were left out.`,
-      );
-    }
-    if (failure?.status === "rejected") {
-      notes.push(
-        failure.reason instanceof Error
-          ? failure.reason.message
-          : "Could not attach that document.",
-      );
-    }
-    setError(notes.join(" ") || null);
-    setBusy(false);
   }
 
-  async function onSend(question: string) {
-    if (busy) return;
+  function onSend(question: string): boolean {
     const chatId = active?.id ?? nextId();
+    const started = beginAsk(activityRef.current, chatId);
+    if (!started) return false;
+    commitActivity(started);
     const attached = documents;
     const prior = priorTurns(messages);
     const userMessage: ChatItem = {
@@ -197,8 +250,17 @@ export function ChatApp() {
       });
     });
     setDraftDocuments([]);
-    setPendingChatId(chatId);
-    setBusy(true);
+    void ask(chatId, started, attached, question, prior);
+    return true;
+  }
+
+  async function ask(
+    chatId: string,
+    started: ChatActivity,
+    attached: DocumentContext[],
+    question: string,
+    prior: ChatTurn[],
+  ) {
     try {
       const result = await askAttachedDocument(attached, question, prior);
       setAskNotice(result.kind === "verdict" ? (result.warning ?? null) : null);
@@ -226,14 +288,13 @@ export function ChatApp() {
         setError(message);
       }
     } finally {
-      setBusy(false);
-      setPendingChatId((current) => (current === chatId ? null : current));
+      commitActivity(finishActivity(activityRef.current, started));
     }
   }
 
   function onNewChat() {
     setHistory((current) => ({ ...current, activeId: null }));
-    setDraftDocuments([]);
+    if (!keepDraftAttachments(activityRef.current)) setDraftDocuments([]);
     setError(null);
     setAskNotice(null);
     setSidebarOpen(false);
@@ -241,7 +302,7 @@ export function ChatApp() {
 
   function onSelectChat(chatId: string) {
     setHistory((current) => ({ ...current, activeId: chatId }));
-    setDraftDocuments([]);
+    if (!keepDraftAttachments(activityRef.current)) setDraftDocuments([]);
     setError(null);
     setAskNotice(null);
     setSidebarOpen(false);
@@ -276,7 +337,7 @@ export function ChatApp() {
   function onDragEnter(event: DragEvent<HTMLElement>) {
     if (!hasFiles(event)) return;
     event.preventDefault();
-    setDragging(true);
+    commitDrag(dragEnter(dragRef.current));
   }
 
   function onDragOver(event: DragEvent<HTMLElement>) {
@@ -287,21 +348,25 @@ export function ChatApp() {
   function onDragLeave(event: DragEvent<HTMLElement>) {
     if (!hasFiles(event)) return;
     const next = event.relatedTarget;
-    if (next instanceof Node && event.currentTarget.contains(next)) return;
-    setDragging(false);
+    const inside = next instanceof Node && event.currentTarget.contains(next);
+    commitDrag(dragLeave(dragRef.current, inside));
   }
 
   function onDrop(event: DragEvent<HTMLElement>) {
     if (!hasFiles(event)) return;
     event.preventDefault();
-    setDragging(false);
+    commitDrag(dragReset());
     const files = Array.from(event.dataTransfer.files ?? []);
-    if (files.length > 0 && !busy) void onFiles(files);
+    if (files.length > 0) void onFiles(files);
+  }
+
+  function onDragEnd() {
+    commitDrag(dragReset());
   }
 
   const notices = [...setupNotices, ...(askNotice ? [askNotice] : [])];
   const empty = messages.length === 0;
-  const hasHistory = history.chats.length > 0;
+  const hasHistory = sidebar.kind !== "absent";
 
   return (
     <main
@@ -310,10 +375,11 @@ export function ChatApp() {
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
+      onDragEnd={onDragEnd}
     >
       {hasHistory ? (
         <>
-          {sidebarOpen ? (
+          {sidebar.kind === "drawer" && sidebar.open ? (
             <button
               type="button"
               className="sidebar-backdrop"
@@ -322,10 +388,16 @@ export function ChatApp() {
             />
           ) : null}
           <aside
-            className={sidebarOpen ? "sidebar open" : "sidebar"}
+            className={
+              sidebar.kind === "drawer" && sidebar.open
+                ? "sidebar open"
+                : "sidebar"
+            }
             aria-label="Chat history"
-            aria-hidden={!desktop && !sidebarOpen}
-            inert={!desktop && !sidebarOpen ? true : undefined}
+            aria-hidden={sidebar.kind === "drawer" && !sidebar.open}
+            inert={
+              sidebar.kind === "drawer" && !sidebar.open ? true : undefined
+            }
           >
             <div className="sidebar-head">
               <button
@@ -458,7 +530,7 @@ export function ChatApp() {
             <div className="stage-inner">
               <ChatThread
                 messages={messages}
-                pending={pendingChatId === active?.id}
+                pending={showPending(activity, active?.id ?? null)}
               />
             </div>
           )}
@@ -484,6 +556,7 @@ export function ChatApp() {
                       <FileChip
                         key={item.id}
                         session={item}
+                        locked={busy}
                         onClear={() => onRemoveDocument(item.id)}
                       />
                     ))
@@ -496,7 +569,7 @@ export function ChatApp() {
         </div>
       </div>
 
-      <DropZone active={dragging} />
+      <DropZone active={drag.status === "hovering"} />
     </main>
   );
 }

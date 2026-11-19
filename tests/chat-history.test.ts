@@ -7,7 +7,9 @@ import {
   type ChatHistory,
   type HistoryStorage,
   type StoredChat,
+  commitHistory,
   loadHistory,
+  persistAfterQuota,
   saveHistory,
 } from "../src/lib/chat-history";
 
@@ -245,5 +247,51 @@ describe("chat history", () => {
       "3",
       "2",
     ]);
+  });
+
+  it("drops stored images when that is the only way to fit", () => {
+    const photo: DocumentContext = {
+      ...document,
+      image: {
+        format: "jpg",
+        dataBase64: "x".repeat(800),
+        width: 280,
+        height: 280,
+      },
+    };
+    const history: ChatHistory = {
+      activeId: "one",
+      chats: [chat("one", "Is there a person?", 2, { documents: [photo] })],
+    };
+    expect(persistAfterQuota(history, false).step).toBe("strip_images");
+    const stored = JSON.stringify(
+      saveHistory(history, memoryStorage()),
+    );
+    const storage = memoryStorage(
+      stored.length - (photo.image?.dataBase64.length ?? 0),
+    );
+    const saved = commitHistory(history, storage);
+
+    expect(saved.persisted).toBe(true);
+    expect(saved.history.chats[0]?.documents[0]?.image).toBeUndefined();
+    expect(loadHistory(storage).chats[0]?.documents[0]?.image).toBeUndefined();
+  });
+
+  it("leaves storage unchanged when even one chat cannot be stored", () => {
+    const history: ChatHistory = {
+      activeId: "one",
+      chats: [chat("one", "x".repeat(500), 2)],
+    };
+    const storage = memoryStorage(20);
+    storage.setItem(HISTORY_KEY, "{\"kept\":true}");
+    const saved = commitHistory(history, storage);
+
+    expect(saved.persisted).toBe(false);
+    expect(saved.history.chats).toHaveLength(1);
+    expect(storage.raw()).toBe("{\"kept\":true}");
+    expect(persistAfterQuota(history, true)).toEqual({
+      step: "give_up",
+      history,
+    });
   });
 });

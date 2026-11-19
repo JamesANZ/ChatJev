@@ -7,8 +7,9 @@ import {
   listedSubjects,
   missingSubjects,
   needsWebEvidence,
+  planEvidence,
 } from "../src/core/evidence";
-import { gatherSystem } from "../src/core/gateway-llm";
+import { gatherSystem, settleGather } from "../src/core/gateway-llm";
 import { createDemoJevClient } from "../src/core/jev-client";
 import { createHeuristicLlm } from "../src/core/llm";
 import type { SourceSnippet } from "../src/core/types";
@@ -24,6 +25,10 @@ const CARCINOGEN: SourceSnippet = {
 describe("needsWebEvidence", () => {
   it("searches when nothing is attached", () => {
     expect(needsWebEvidence("Is nicotine a carcinogen?")).toBe(true);
+    expect(planEvidence("Is nicotine a carcinogen?")).toEqual({
+      source: "web",
+      reason: "no_document",
+    });
   });
 
   it("searches when the file does not cover the claim", () => {
@@ -33,6 +38,12 @@ describe("needsWebEvidence", () => {
         "This ticket is a flight from Barcelona to London.",
       ),
     ).toBe(true);
+    expect(
+      planEvidence(
+        "Is nicotine a carcinogen?",
+        "This ticket is a flight from Barcelona to London.",
+      ),
+    ).toEqual({ source: "web", reason: "uncovered" });
   });
 
   it("stays on the file when the question is about that file", () => {
@@ -55,6 +66,11 @@ describe("needsWebEvidence", () => {
         },
       ),
     ).toBe(false);
+    expect(
+      planEvidence("Is there a dog in this picture?", "Attached image: a.jpg.", {
+        image: true,
+      }),
+    ).toEqual({ source: "image" });
   });
 
   it("searches when the file states every answer but one", () => {
@@ -64,6 +80,10 @@ describe("needsWebEvidence", () => {
     expect(missingSubjects(question, document)).toEqual(["Italy"]);
     expect(documentCovers(question, document)).toBe(true);
     expect(needsWebEvidence(question, document)).toBe(true);
+    expect(planEvidence(question, document)).toEqual({
+      source: "web",
+      reason: "missing_subject",
+    });
     expect(
       needsWebEvidence(question, `${document}\nThe capital of Italy is Rome.`),
     ).toBe(false);
@@ -178,6 +198,27 @@ describe("web evidence answers", () => {
     expect(
       result.judgments.find((item) => item.key === "italy")?.line,
     ).toContain("The capital of Italy is Rome.");
+  });
+});
+
+describe("settleGather", () => {
+  it("fails only when the search failed and there is no file", () => {
+    expect(
+      settleGather({ snippets: [], failed: true, hasDocument: false }),
+    ).toEqual({ action: "fail" });
+    expect(
+      settleGather({
+        snippets: [CARCINOGEN],
+        failed: true,
+        hasDocument: false,
+      }),
+    ).toEqual({ action: "use", snippets: [CARCINOGEN] });
+    expect(
+      settleGather({ snippets: [], failed: true, hasDocument: true }),
+    ).toEqual({ action: "use", snippets: [] });
+    expect(
+      settleGather({ snippets: [], failed: false, hasDocument: false }),
+    ).toEqual({ action: "use", snippets: [] });
   });
 });
 

@@ -122,7 +122,7 @@ export interface JevClient {
 }
 
 export type Classification = {
-  isJudgment: boolean;
+  decision: "closed" | "uncertain" | "open";
   kind: QuestionKind;
   noul: number;
   model: string;
